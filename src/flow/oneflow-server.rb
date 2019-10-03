@@ -455,15 +455,40 @@ post '/service_template/:id/action' do
 
                 ServiceTemplate.validate(instantiate_template)
 
+                # Instantiate VNTemplates if needed
+                instantiate_template['networks'].each do |net|
+                    next unless net[net.keys[0]].key?('template_id')
+
+                    vntmpl_id = OpenNebula::VNTemplate
+                                .new_with_id(net[net.keys[0]]['template_id']
+                                .to_i, @client).instantiate
+
+                    net[net.keys[0]]['id'] = vntmpl_id
+                end
+
                 instantiate_template["roles"].each { |role|
                     if role["vm_template_contents"]
                         # $CUSTOM1_VAR Any word character (letter, number, underscore)
                         role["vm_template_contents"].scan(/\$(\w+)/).each { |key|
+                            # Check if $ var value is in custom_attrs_values
                             if instantiate_template["custom_attrs_values"].has_key?(key[0])
                                 role["vm_template_contents"].gsub!(
                                     "$"+key[0],
                                     instantiate_template["custom_attrs_values"][key[0]])
+                                next
                             end
+
+                            # Check if $ var value is in networks
+                            net = instantiate_template['networks']
+                                  .find {|att| att.key? key[0] }
+
+                            next if net.nil?
+
+                            role['vm_template_contents'].gsub!(
+                                '$'+key[0],
+                                net[net.keys[0]]['id'].to_s
+                            )
+
                         }
                     end
 
