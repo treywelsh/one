@@ -455,28 +455,43 @@ post '/service_template/:id/action' do
 
                 ServiceTemplate.validate(instantiate_template)
 
-                instantiate_template["roles"].each { |role|
-                    if role["vm_template_contents"]
+                # Instantiate VNTemplates if needed
+                instantiate_template['custom_attrs_values'].each do |val|
+                    next unless val[val.keys[0]].key?('template_id')
+
+                    vntmpl_id = OpenNebula::VNTemplate
+                                .new_with_id(val[val.keys[0]]['template_id']
+                                .to_i, @client).instantiate
+
+                    val[val.keys[0]]['id'] = vntmpl_id
+                end
+
+                instantiate_template['roles'].each do |role|
+                    if role['vm_template_contents']
                         # $CUSTOM1_VAR Any word character (letter, number, underscore)
-                        role["vm_template_contents"].scan(/\$(\w+)/).each { |key|
-                            if instantiate_template["custom_attrs_values"].has_key?(key[0])
-                                role["vm_template_contents"].gsub!(
-                                    "$"+key[0],
-                                    instantiate_template["custom_attrs_values"][key[0]])
+                        role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
+                            custom_attr = instantiate_template['custom_attrs_values'].find do |att|
+                                att.key? key[0]
                             end
-                        }
+
+                            next if custom_attr.nil?
+
+                            role["vm_template_contents"].gsub!(
+                                "$"+key[0],
+                                custom_attr[custom_attr.keys[0]]['id'].to_s
+                            )
+                        end
                     end
 
-                    if role["user_inputs_values"]
-                        role["vm_template_contents"] ||= ""
-                        role["user_inputs_values"].each{ |key, value|
-                            role["vm_template_contents"] += "\n#{key}=\"#{value}\""
+                    if role['user_inputs_values']
+                        role['vm_template_contents'] ||= ""
+                        role['user_inputs_values'].each{ |key, value|
+                            role['vm_template_contents'] += "\n#{key}=\"#{value}\""
                         }
                     end
-                }
+                end
 
                 instantiate_template_json = instantiate_template.to_json
-
             rescue Validator::ParseException, JSON::ParserError
                 error 400, $!.message
             end
