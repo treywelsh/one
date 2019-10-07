@@ -457,24 +457,31 @@ post '/service_template/:id/action' do
 
                 # Instantiate VNTemplates if needed
                 instantiate_template['networks'].each do |net|
+                    extra = ''
+
                     next unless net[net.keys[0]].key?('template_id')
+
+                    extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
 
                     vntmpl_id = OpenNebula::VNTemplate
                                 .new_with_id(net[net.keys[0]]['template_id']
-                                .to_i, @client).instantiate
+                                .to_i, @client).instantiate('', extra)
+
+                    # TODO, check which error should be returned
+                    return error 400 if OpenNebula.is_error?(vntmpl_id)
 
                     net[net.keys[0]]['id'] = vntmpl_id
                 end
 
-                instantiate_template["roles"].each { |role|
-                    if role["vm_template_contents"]
+                instantiate_template['roles'].each do |role|
+                    if role['vm_template_contents']
                         # $CUSTOM1_VAR Any word character (letter, number, underscore)
-                        role["vm_template_contents"].scan(/\$(\w+)/).each { |key|
+                        role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
                             # Check if $ var value is in custom_attrs_values
-                            if instantiate_template["custom_attrs_values"].has_key?(key[0])
-                                role["vm_template_contents"].gsub!(
-                                    "$"+key[0],
-                                    instantiate_template["custom_attrs_values"][key[0]])
+                            if instantiate_template['custom_attrs_values'].has_key?(key[0])
+                                role['vm_template_contents'].gsub!(
+                                    '$'+key[0],
+                                    instantiate_template['custom_attrs_values'][key[0]])
                                 next
                             end
 
@@ -488,20 +495,18 @@ post '/service_template/:id/action' do
                                 '$'+key[0],
                                 net[net.keys[0]]['id'].to_s
                             )
-
-                        }
+                        end
                     end
 
-                    if role["user_inputs_values"]
-                        role["vm_template_contents"] ||= ""
-                        role["user_inputs_values"].each{ |key, value|
-                            role["vm_template_contents"] += "\n#{key}=\"#{value}\""
-                        }
+                    if role['user_inputs_values']
+                        role['vm_template_contents'] ||= ''
+                        role['user_inputs_values'].each do |key, value|
+                            role['vm_template_contents'] += "\n#{key}=\"#{value}\""
+                        end
                     end
-                }
+                end
 
                 instantiate_template_json = instantiate_template.to_json
-
             rescue Validator::ParseException, JSON::ParserError
                 error 400, $!.message
             end
