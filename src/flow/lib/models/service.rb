@@ -271,11 +271,29 @@ module OpenNebula
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
         def delete
-            @roles.each { |name, role|
-                role.delete()
-            }
+            @roles.each do |_name, role|
+                role.delete
+            end
 
-            return super()
+            # TODO, wait until all VMs are in DONE state
+            sleep 10
+
+            networks = JSON.parse(self['TEMPLATE/BODY'])['networks']
+
+            networks.each do |net|
+                next unless net[net.keys[0]].key? 'template_id'
+
+                net_id = net[net.keys[0]]['id'].to_i
+
+                rc = OpenNebula::VirtualNetwork
+                     .new_with_id(net_id, @client).delete
+
+                if OpenNebula.is_error?(rc)
+                    log_info("Error deleting vnet #{net_id}: #{rc}")
+                end
+            end
+
+            super()
         end
 
         # Retrieves the information of the Service and all its Nodes.
