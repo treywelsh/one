@@ -447,6 +447,24 @@ post '/service_template/:id/action' do
         end
 
         merge_template = opts['merge_template']
+        service_json = JSON.parse(service_template.to_json)
+
+        # Check custom_attrs
+        if !(service_json['DOCUMENT']['TEMPLATE']['BODY']['custom_attrs'].keys -
+           merge_template['custom_attrs_values'].keys).empty?
+            status 204
+            return body 'Every custom_attrs key must have its value defined '\
+                        'at custom_attrs_value'
+        end
+
+        # Check networks
+        if !(service_json['DOCUMENT']['TEMPLATE']['BODY']['networks'].keys -
+           merge_template['networks_values'].collect {|i| i.keys }.flatten)
+           .empty?
+            status 204
+            return body 'Every network key must have its value defined at ' \
+                        'networks_value'
+        end
 
         service = service_template.instantiate(merge_template)
 
