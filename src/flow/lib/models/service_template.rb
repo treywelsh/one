@@ -179,7 +179,9 @@ module OpenNebula
             }
         }
 
-
+        def self.init_default_vn_name_template(vn_name_template)
+            @@vn_name_template = vn_name_template
+        end
 
         DOCUMENT_TYPE = 101
 
@@ -271,9 +273,14 @@ module OpenNebula
 
                         extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
 
+                        vnet_name = @@vn_name_template
+                                    .gsub('$SERVICE_ID',   id.to_s)
+                                    .gsub('$SERVICE_NAME', name.to_s)
+                                    .gsub('$ROLE_NAME',    net.keys[0])
+
                         vntmpl_id = OpenNebula::VNTemplate
                                     .new_with_id(net[net.keys[0]]['template_id']
-                                    .to_i, @client).instantiate('', extra)
+                                    .to_i, @client).instantiate(vnet_name, extra)
 
                         # TODO, check which error should be returned
                         return error 400 if OpenNebula.is_error?(vntmpl_id)

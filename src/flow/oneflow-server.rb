@@ -133,6 +133,7 @@ Role.init_force_deletion(conf[:force_deletion])
 
 conf[:vm_name_template] ||= DEFAULT_VM_NAME_TEMPLATE
 Role.init_default_vm_name_template(conf[:vm_name_template])
+ServiceTemplate.init_default_vn_name_template(conf[:vn_name_template])
 
 ##############################################################################
 # LCM thread
