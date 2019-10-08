@@ -278,7 +278,7 @@ module OpenNebula
             # TODO, wait until all VMs are in DONE state
             sleep 10
 
-            networks = JSON.parse(self['TEMPLATE/BODY'])['networks']
+            networks = JSON.parse(self['TEMPLATE/BODY'])['networks_values']
 
             networks.each do |net|
                 next unless net[net.keys[0]].key? 'template_id'
