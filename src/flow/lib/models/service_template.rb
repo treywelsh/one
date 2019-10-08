@@ -248,6 +248,91 @@ module OpenNebula
             validate_values(template)
         end
 
+        def instantiate(merge_template)
+            rc = nil
+            service = nil
+
+            if merge_template.nil?
+                service = OpenNebula::Service.new(OpenNebula::Service.build_xml,
+                                                  @client)
+
+                rc = service.allocate(instantiate_template_json)
+            else
+                begin
+                    instantiate_template = JSON.parse(@body.to_json).merge(merge_template)
+
+                    ServiceTemplate.validate(instantiate_template)
+
+                    # Instantiate VNTemplates if needed
+                    instantiate_template['networks'].each do |net|
+                        extra = ''
+
+                        next unless net[net.keys[0]].key?('template_id')
+
+                        extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
+
+                        vntmpl_id = OpenNebula::VNTemplate
+                                    .new_with_id(net[net.keys[0]]['template_id']
+                                    .to_i, @client).instantiate('', extra)
+
+                        # TODO, check which error should be returned
+                        return error 400 if OpenNebula.is_error?(vntmpl_id)
+
+                        net[net.keys[0]]['id'] = vntmpl_id
+                    end
+
+                    # replace $attributes
+                    instantiate_template['roles'].each do |role|
+                        if role['vm_template_contents']
+                            # $CUSTOM1_VAR Any word character (letter, number, underscore)
+                            role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
+                                # Check if $ var value is in custom_attrs_values
+                                if instantiate_template['custom_attrs_values'].has_key?(key[0])
+                                    role['vm_template_contents'].gsub!(
+                                        '$'+key[0],
+                                        instantiate_template['custom_attrs_values'][key[0]])
+                                    next
+                                end
+
+                                # Check if $ var value is in networks
+                                net = instantiate_template['networks']
+                                      .find {|att| att.key? key[0] }
+
+                                next if net.nil?
+
+                                role['vm_template_contents'].gsub!(
+                                    '$'+key[0],
+                                    net[net.keys[0]]['id'].to_s
+                                )
+                            end
+                        end
+
+                        if role['user_inputs_values']
+                            role['vm_template_contents'] ||= ''
+                            role['user_inputs_values'].each do |key, value|
+                                role['vm_template_contents'] += "\n#{key}=\"#{value}\""
+                            end
+                        end
+                    end
+
+                    service = OpenNebula::Service.new(OpenNebula::Service.build_xml, @client)
+                    rc = service.allocate(instantiate_template.to_json)
+                rescue Validator::ParseException, JSON::ParserError
+                    error 400, $!.message
+                    return
+                end
+            end
+
+            if OpenNebula.is_error?(rc)
+                error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
+                return
+            end
+
+            service.info
+
+            service
+        end
+
     private
 
         def self.validate_values(template)
