@@ -264,7 +264,7 @@ module OpenNebula
                     ServiceTemplate.validate(instantiate_template)
 
                     # Instantiate VNTemplates if needed
-                    instantiate_template['networks'].each do |net|
+                    instantiate_template['networks_values'].each do |net|
                         extra = ''
 
                         next unless net[net.keys[0]].key?('template_id')
@@ -295,7 +295,7 @@ module OpenNebula
                                 end
 
                                 # Check if $ var value is in networks
-                                net = instantiate_template['networks']
+                                net = instantiate_template['networks_values']
                                       .find {|att| att.key? key[0] }
 
                                 next if net.nil?
