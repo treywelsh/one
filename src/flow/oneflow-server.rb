@@ -441,89 +441,19 @@ post '/service_template/:id/action' do
     rc = case action['perform']
     when 'instantiate'
         rc = service_template.info
+
         if OpenNebula.is_error?(rc)
             error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
         end
 
         merge_template = opts['merge_template']
 
-        if !merge_template.nil?
-            begin
-                orig_template = JSON.parse(service_template.template)
+        service = service_template.instantiate(merge_template)
 
-                instantiate_template = orig_template.merge(merge_template)
-
-                ServiceTemplate.validate(instantiate_template)
-
-                # Instantiate VNTemplates if needed
-                instantiate_template['networks'].each do |net|
-                    extra = ''
-
-                    next unless net[net.keys[0]].key?('template_id')
-
-                    extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
-
-                    vntmpl_id = OpenNebula::VNTemplate
-                                .new_with_id(net[net.keys[0]]['template_id']
-                                .to_i, @client).instantiate('', extra)
-
-                    # TODO, check which error should be returned
-                    return error 400 if OpenNebula.is_error?(vntmpl_id)
-
-                    net[net.keys[0]]['id'] = vntmpl_id
-                end
-
-                instantiate_template['roles'].each do |role|
-                    if role['vm_template_contents']
-                        # $CUSTOM1_VAR Any word character (letter, number, underscore)
-                        role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
-                            # Check if $ var value is in custom_attrs_values
-                            if instantiate_template['custom_attrs_values'].has_key?(key[0])
-                                role['vm_template_contents'].gsub!(
-                                    '$'+key[0],
-                                    instantiate_template['custom_attrs_values'][key[0]])
-                                next
-                            end
-
-                            # Check if $ var value is in networks
-                            net = instantiate_template['networks']
-                                  .find {|att| att.key? key[0] }
-
-                            next if net.nil?
-
-                            role['vm_template_contents'].gsub!(
-                                '$'+key[0],
-                                net[net.keys[0]]['id'].to_s
-                            )
-                        end
-                    end
-
-                    if role['user_inputs_values']
-                        role['vm_template_contents'] ||= ''
-                        role['user_inputs_values'].each do |key, value|
-                            role['vm_template_contents'] += "\n#{key}=\"#{value}\""
-                        end
-                    end
-                end
-
-                instantiate_template_json = instantiate_template.to_json
-            rescue Validator::ParseException, JSON::ParserError
-                error 400, $!.message
-            end
-        else
-            instantiate_template_json = service_template.template
-        end
-
-        service = OpenNebula::Service.new(OpenNebula::Service.build_xml, @client)
-        rc = service.allocate(instantiate_template_json)
-        if OpenNebula.is_error?(rc)
-            error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
-        end
-
-        service.info
+        service_json = service.nil? ? '' : service.to_json
 
         status 201
-        body service.to_json
+        body service_json
     when 'chown'
         if opts && opts['owner_id']
             args = Array.new
