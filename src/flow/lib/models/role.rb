@@ -55,7 +55,9 @@ module OpenNebula
             'FAILED_DEPLOYING'   => 7,
             'SCALING'            => 8,
             'FAILED_SCALING'     => 9,
-            'COOLDOWN'           => 10
+            'COOLDOWN'           => 10,
+            'DELETING'           => 11,
+            'FAILED_DELETING'    => 12
         }
 
         STATE_STR = [
@@ -69,7 +71,9 @@ module OpenNebula
             'FAILED_DEPLOYING',
             'SCALING',
             'FAILED_SCALING',
-            'COOLDOWN'
+            'COOLDOWN',
+            'DELETING',
+            'FAILED_DELETING'
         ]
 
         LOG_COMP = "ROL"
@@ -364,7 +368,7 @@ module OpenNebula
         # @return [Array<true, nil>] All the VMs are deleted, and the return
         #   ignored
         def delete
-            get_nodes.each { |node|
+            get_nodes.each do |node|
                 vm_id = node['deploy_id']
 
                 Log.debug LOG_COMP, "Role #{name} : Deleting VM #{vm_id}", @service.id()
@@ -382,12 +386,13 @@ module OpenNebula
                     msg = "Role #{name} : Delete failed for VM #{vm_id}; #{rc.message}"
                     Log.error LOG_COMP, msg, @service.id()
                     @service.log_error(msg)
+                    set_state(Role::STATE['FAILED_DELETING'])
                 else
                     Log.debug LOG_COMP, "Role #{name} : Delete success for VM #{vm_id}", @service.id()
                 end
-            }
+            end
 
-            return [true, nil]
+            [true, nil]
         end
 
         # Changes the owner/group of all the nodes in this role

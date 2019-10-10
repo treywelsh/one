@@ -140,12 +140,26 @@ class ServiceLCM
                             if !service.any_role_failed?
                                 service.set_state(Service::STATE['UNDEPLOYING'])
                             end
+                        when Service::STATE['DELETING']
+                            strategy.monitor_step(service)
+
+                            if service.all_roles_done?
+                                service.delete
+                            elsif service.any_role_failed?
+                                service.set_state(Service::STATE['FAILED_DELETING'])
+                            end
+                        when Service::STATE['FAILED_DELETING']
+                            strategy.monitor_step(service)
+
+                            if !service.any_role_failed?
+                                service.set_state(Service::STATE['DELETING'])
+                            end
                         end
 
-                        rc = service.update()
+                        rc = service.update
                         if OpenNebula.is_error?(rc)
-                            Log.error LOG_COMP, "Error trying to update " <<
-                                "Service #{service.id()} : #{rc.message}"
+                            Log.error LOG_COMP, 'Error trying to update ' \
+                                                "Service #{service.id()} : #{rc.message}"
                         end
                     }
 

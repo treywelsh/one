@@ -194,6 +194,12 @@ class Strategy
                 if !OpenNebula.is_error?(rc) && role_finished_scaling?(role)
                     role.set_state(Role::STATE['SCALING'])
                 end
+            when Role::STATE['DELETING']
+                if OpenNebula.is_error?(rc) || any_node_failed?(role)
+                    role.set_state(Role::STATE['FAILED_DELETING'])
+                elsif role_nodes_done?(role)
+                    role.set_state(Role::STATE['DONE'])
+                end
             end
         }
     end
@@ -266,6 +272,24 @@ protected
 
         return true
     end
+
+    # Determine if the role nodes are done
+    # @param [Role] role
+    # @return [true|false]
+    def role_nodes_done?(role)
+        if role.get_nodes.size != role.cardinality
+            return false
+        end
+
+        role.get_nodes.each do |node|
+            state = node['vm_info']['VM']['STATE'].to_i
+
+            return false unless node && state == 6
+        end
+
+        true
+    end
+
 
     # Returns true if any VM is in UNKNOWN or FAILED
     # @param [Role] role
