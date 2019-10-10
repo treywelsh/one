@@ -30,7 +30,9 @@ module OpenNebula
             'FAILED_DEPLOYING'   => 7,
             'SCALING'            => 8,
             'FAILED_SCALING'     => 9,
-            'COOLDOWN'           => 10
+            'COOLDOWN'           => 10,
+            'DELETING'           => 11,
+            'FAILED_DELETING'    => 12
         }
 
         STATE_STR = [
@@ -44,7 +46,9 @@ module OpenNebula
             'FAILED_DEPLOYING',
             'SCALING',
             'FAILED_SCALING',
-            'COOLDOWN'
+            'COOLDOWN',
+            'DELETING',
+            'FAILED_DELETING'
         ]
 
         LOG_COMP = "SER"
@@ -131,7 +135,8 @@ module OpenNebula
         def any_role_failed?()
             failed_states = [
                 Role::STATE['FAILED_DEPLOYING'],
-                Role::STATE['FAILED_UNDEPLOYING']]
+                Role::STATE['FAILED_UNDEPLOYING'],
+                Role::STATE['FAILED_DELETING']]
 
             @roles.each { |name, role|
                 if failed_states.include?(role.state)
@@ -270,14 +275,8 @@ module OpenNebula
         # Delete the service. All the VMs are also deleted from OpenNebula.
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
+
         def delete
-            @roles.each do |_name, role|
-                role.delete
-            end
-
-            # TODO, wait until all VMs are in DONE state
-            sleep 10
-
             networks = JSON.parse(self['TEMPLATE/BODY'])['networks_values']
 
             networks.each do |net|
@@ -294,6 +293,13 @@ module OpenNebula
             end
 
             super()
+        end
+
+        def delete_roles
+            @roles.each do |_name, role|
+                role.set_state(Role::STATE['DELETING'])
+                role.delete
+            end
         end
 
         # Retrieves the information of the Service and all its Nodes.

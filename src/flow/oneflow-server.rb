@@ -183,7 +183,14 @@ delete '/service/:id' do
 
     rc = nil
     service = service_pool.get(params[:id]) { |service|
-        rc = service.delete
+        service.set_state(Service::STATE['DELETING'])
+        service.delete_roles
+
+        rc = service.update
+        if OpenNebula.is_error?(rc)
+            Log.error LOG_COMP, 'Error trying to update ' \
+                                "Service #{service.id()} : #{rc.message}"
+        end
     }
 
     if OpenNebula.is_error?(service)
@@ -468,6 +475,10 @@ post '/service_template/:id/action' do
         end
 
         service = service_template.instantiate(merge_template)
+
+        if OpenNebula.is_error?(service)
+            error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+        end
 
         service_json = service.nil? ? '' : service.to_json
 
