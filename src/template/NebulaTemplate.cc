@@ -14,51 +14,59 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef NEBULA_TEMPLATE_H_
-#define NEBULA_TEMPLATE_H_
+#include "NebulaTemplate.h"
 
-#include "Template.h"
+using namespace std;
 
-#include <map>
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
-/**
- * This class provides the basic abstraction for OpenNebula configuration files
- */
-class NebulaTemplate : public Template
+int NebulaTemplate::load_configuration()
 {
-public:
-    NebulaTemplate(const string& etc_location, const char * _conf_name)
+    char * error = 0;
+    int    rc;
+
+    string      aname;
+    Attribute * attr;
+
+    map<string, Attribute *>::iterator  iter, j, prev;
+
+    set_conf_default();
+
+    rc = parse(conf_file.c_str(), &error);
+
+    if ( rc != 0 && error != 0)
     {
-        conf_file = etc_location + _conf_name;
+        cout << "\nError while parsing configuration file:\n" << error << endl;
+
+        free(error);
+
+        return -1;
     }
 
-    virtual ~NebulaTemplate() = default;
+    for(iter=conf_default.begin();iter!=conf_default.end();)
+    {
+        aname = iter->first;
+        attr  = iter->second;
 
-    /**
-     *  Parse and loads the configuration in the template
-     */
-    virtual int load_configuration();
+        j = attributes.find(aname);
 
-protected:
-    /**
-     *  Full path to the configuration file
-     */
-    string                  conf_file;
+        if ( j == attributes.end() )
+        {
+            attributes.insert(make_pair(aname,attr));
+            iter++;
+        }
+        else
+        {
+            delete iter->second;
 
-    /**
-     *  Defaults for the configuration file
-     */
-    multimap<string, Attribute*> conf_default;
+            prev = iter++;
 
-    /**
-     *  Sets the defaults value for the template
-     */
-    virtual void set_conf_default() = 0;
+            conf_default.erase(prev);
+        }
+    }
 
-    /**
-     *  Sets the defaults value for multiple attributes
-     */
-    virtual void set_multiple_conf_default() = 0;
-};
+    set_multiple_conf_default();
 
-#endif /*NEBULA_TEMPLATE_H_*/
+    return 0;
+}

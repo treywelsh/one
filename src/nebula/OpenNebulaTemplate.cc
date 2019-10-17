@@ -14,7 +14,7 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "NebulaTemplate.h"
+#include "OpenNebulaTemplate.h"
 #include "NebulaUtil.h"
 
 #include <unistd.h>
@@ -28,60 +28,7 @@ using namespace std;
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int NebulaTemplate::load_configuration()
-{
-    char * error = 0;
-    int    rc;
-
-    string      aname;
-    Attribute * attr;
-
-    map<string, Attribute *>::iterator  iter, j, prev;
-
-    set_conf_default();
-
-    rc = parse(conf_file.c_str(), &error);
-
-    if ( rc != 0 && error != 0)
-    {
-        cout << "\nError while parsing configuration file:\n" << error << endl;
-
-        free(error);
-
-        return -1;
-    }
-
-    for(iter=conf_default.begin();iter!=conf_default.end();)
-    {
-        aname = iter->first;
-        attr  = iter->second;
-
-        j = attributes.find(aname);
-
-        if ( j == attributes.end() )
-        {
-            attributes.insert(make_pair(aname,attr));
-            iter++;
-        }
-        else
-        {
-            delete iter->second;
-
-            prev = iter++;
-
-            conf_default.erase(prev);
-        }
-    }
-
-    set_multiple_conf_default();
-
-    return 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-const char * OpenNebulaTemplate::conf_name="oned.conf";
+const char * OpenNebulaTemplate::conf_name = "oned.conf";
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -90,12 +37,12 @@ int OpenNebulaTemplate::load_configuration()
 {
     std::string error;
 
-    if ( NebulaTemplate::load_configuration() != 0 )
+    if (NebulaTemplate::load_configuration() != 0)
     {
         return -1;
     }
 
-    if ( vm_actions.set_auth_ops(*this, error) != 0 )
+    if (vm_actions.set_auth_ops(*this, error) != 0)
     {
         cout << "\nError while parsing configuration file:\n" << error << endl;
         return -1;
@@ -249,9 +196,9 @@ void OpenNebulaTemplate::register_multiple_conf_default(
 
     get(conf_section.c_str(), attrs);
 
-    for(i = conf_default.begin(); i != conf_default.end(); )
+    for (i = conf_default.begin(); i != conf_default.end(); )
     {
-        if ( i->first == conf_section )
+        if (i->first == conf_section)
         {
             found = false;
 
@@ -273,7 +220,7 @@ void OpenNebulaTemplate::register_multiple_conf_default(
                 }
             }
 
-            if ( !found )
+            if (!found)
             {
                 // insert into attributes
                 attributes.insert(make_pair(conf_section, d_attr));
@@ -672,7 +619,7 @@ int OpenNebulaTemplate::load_key()
 
         ifile.open(keyfile.c_str(), ios::in);
 
-        if ( !ifile.is_open() )
+        if (!ifile.is_open())
         {
             cout << "Could not create OpenNebula keyfile: " << keyfile;
             return -1;
@@ -699,7 +646,7 @@ int OpenNebulaTemplate::load_key()
 
         ofile.open(keyfile.c_str(), ios::out | ios::trunc);
 
-        if ( !ofile.is_open() )
+        if (!ofile.is_open())
         {
             cout << "Could not create OpenNebula keyfile: " << keyfile;
             return -1;
