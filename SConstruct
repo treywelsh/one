@@ -293,6 +293,7 @@ build_scripts = [
     'src/im_mad/collectd/SConstruct',
     'src/client/SConstruct',
     'src/docker_machine/SConstruct',
+    'src/monitor/SConstruct',
     svncterm_path
 ]
 

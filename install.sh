@@ -681,6 +681,7 @@ INSTALL_ETC_FILES=(
 
 BIN_FILES="src/nebula/oned \
            src/scheduler/src/sched/mm_sched \
+           src/monitor/onemonitor \
            src/cli/onevm \
            src/cli/oneacct \
            src/cli/oneshowback \
@@ -1614,7 +1615,8 @@ ONEDB_PATCH_FILES="src/onedb/patches/4.14_monitoring.rb \
 ETC_FILES="share/etc/oned.conf \
            share/etc/defaultrc \
            src/tm_mad/tmrc \
-           src/scheduler/etc/sched.conf"
+           src/scheduler/etc/sched.conf \
+           src/monitor/etc/monitor.conf "
 
 EC2_ETC_FILES="src/vmm_mad/remotes/ec2/ec2_driver.conf \
                src/vmm_mad/remotes/ec2/ec2_driver.default"
