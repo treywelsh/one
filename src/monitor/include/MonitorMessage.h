@@ -17,6 +17,7 @@
 #ifndef MONITOR_MESSAGE_H
 #define MONITOR_MESSAGE_H
 
+#include <unistd.h>
 #include <string>
 #include <iostream>
 
@@ -49,8 +50,6 @@ public:
         UNDEFINED    = 4
     };
 
-    virtual ~MonitorMessage();
-
     /**
      *  Parse the Message from an input string
      *    @param input string with the message
@@ -60,17 +59,41 @@ public:
     /**
      *  Writes this object to the given string
      */
-    void write_to(std::string& output) const;
+    int write_to(std::string& output) const;
 
     /**
      *  Writes this object to the given file descriptor
      */
-    void write_to(int fd) const;
+    int write_to(int fd) const
+    {
+        std::string out;
+
+        if ( write_to(out) == -1)
+        {
+            return -1;
+        }
+
+        ::write(fd, (const void *) out.c_str(), out.size());
+
+        return 0;
+    }
 
     /**
      *  Writes this object to the given output stream
      */
-    void write_to(std::ostream) const;
+    int write_to(std::ostream& oss) const
+    {
+        std::string out;
+
+        if ( write_to(out) == -1)
+        {
+            return -1;
+        }
+
+        oss << out;
+
+        return 0;
+    }
 
     /**
      *
@@ -78,6 +101,11 @@ public:
     Type type()
     {
         return _type;
+    }
+
+    void type(Type t)
+    {
+        _type = t;
     }
 
     /**
@@ -88,12 +116,25 @@ public:
         return _payload;
     }
 
+    void payload(const std::string& p)
+    {
+        _payload = p;
+    }
+
 private:
     static const EString<Type> type_str;
 
     Type _type;
 
     std::string _payload;
+
+    static void base64_decode(const std::string& in, std::string& out);
+
+    static int base64_encode(const std::string& in, std::string &out);
+
+    static int zlib_decompress(const std::string& in, std::string& out);
+
+    static int zlib_compress(const std::string& in, std::string& out);
 };
 
 #endif /*MONITOR_MESSAGE_H_*/

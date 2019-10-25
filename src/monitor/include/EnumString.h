@@ -24,9 +24,9 @@ template <typename T>
 class EString
 {
 public:
-    EString(const std::map<const char *, T>&& _em):enum_map(_em) {};
+    EString(const std::map<std::string, T>&& _em):enum_map(_em) {};
 
-    T _from_str(const char * sv) const
+    T _from_str(const std::string& sv) const
     {
         const auto it = enum_map.find(sv);
 
@@ -38,10 +38,10 @@ public:
         return it->second;
     }
 
-    const char * _to_str(T ev) const
+    const std::string& _to_str(T ev) const
     {
         const auto it = std::find_if(enum_map.begin(), enum_map.end(),
-            [ev](const std::pair<const char *, T> & t) -> bool
+            [ev](const std::pair<std::string, T> & t) -> bool
             {
                 return t.second == ev;
             });
@@ -50,7 +50,7 @@ public:
     }
 
 private:
-    const std::map<const char *, T> enum_map;
+    const std::map<std::string, T> enum_map;
 };
 
 #endif /*ENUM_STRING_H*/
