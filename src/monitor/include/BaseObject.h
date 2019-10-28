@@ -14,27 +14,63 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_H_
-#define MONITOR_H_
 
-// #include "HostPoolXML.h"
-// #include "VirtualMachinePoolXML.h"
-#include <pthread.h>
+#ifndef BASE_OBJECT_H_
+#define BASE_OBJECT_H_
 
-class Monitor
+#include "ObjectXML.h"
+
+
+class BaseObject : public ObjectXML
 {
 public:
-    void start();
+    explicit BaseObject()
+    {
+    }
 
-    void thread_execute() {}
-private:
-    pthread_t       monitor_thread;
+    int get_id() const
+    {
+        return oid;
+    };
 
-    // ---------------------------------------------------------------
-    // Pools
-    // ---------------------------------------------------------------
-    // HostPoolXML *               hpool = nullptr;
-    // VirtualMachinePoolXML *     vmpool = nullptr;
+    const std::string& get_name() const
+    {
+        return name;
+    }
+
+    /**
+     * Changes the object's owner
+     * @param _uid New User ID
+     * @param _uname Name of the new user
+     */
+    void set_user(int _uid, const std::string& _uname)
+    {
+        uid   = _uid;
+        uname = _uname;
+    }
+
+    /**
+     * Changes the object's group id
+     * @param _gid New Group ID
+     * @param _gname Name of the new group
+     */
+    void set_group(int _gid, const std::string& _gname)
+    {
+        gid   = _gid;
+        gname = _gname;
+    };
+
+    virtual int from_xml(const std::string& xml_string) = 0;
+    virtual std::string to_xml() const = 0;
+
+protected:
+    int oid                 = -1;
+    int uid                 = -1;
+    int gid                 = -1;
+
+    std::string name;
+    std::string uname;
+    std::string gname;
 };
 
-#endif
+#endif //BASE_OBJECT_H_

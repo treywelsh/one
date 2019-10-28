@@ -1,3 +1,5 @@
+# SConstruct for src/vm
+
 # -------------------------------------------------------------------------- #
 # Copyright 2002-2019, OpenNebula Project, OpenNebula Systems                #
 #                                                                            #
@@ -14,35 +16,14 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-Import('env')
-import os
+Import('mon_env')
 
-# This is the absolute path where the project is located
-cwd=os.getcwd()
+lib_name='nebula_data_model'
 
-# Include dirs
-env.Append(CPPPATH=[
-    cwd + '/include/',
-])
-
-# Library dirs
-
-env.Append(LIBPATH=[
-    cwd+'/src/data_model',
-    cwd+'/src/protocol',
-    cwd+'/src/monitor'
-])
-
-################################################################################
-# SCONS scripts to build
-################################################################################
-
-build_scripts=[
-    'src/data_model/SConstruct',
-    'src/protocol/SConstruct',
-    'src/monitor/SConstruct'
+# Sources to generate the library
+source_files=[
+    'HostBase.cc',
 ]
 
-for script in build_scripts:
-    mon_env=env.Clone()
-    SConscript(script, exports='mon_env')
+# Build library
+mon_env.StaticLibrary(lib_name, source_files)

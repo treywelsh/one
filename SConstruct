@@ -109,7 +109,8 @@ main_env.Append(LIBPATH=[
     cwd+'/src/vdc',
     cwd+'/src/vrouter',
     cwd+'/src/market',
-    cwd+'/src/ipamm'
+    cwd+'/src/ipamm',
+    cwd+'/src/data_model'
 ])
 
 # Compile flags

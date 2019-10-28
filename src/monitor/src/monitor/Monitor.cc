@@ -104,26 +104,37 @@ void Monitor::start()
     // -----------------------------------------------------------
     // XML-RPC Client
     // -----------------------------------------------------------
-    // {
-    //     string       one_xmlrpc;
-    //     long long    message_size;
-    //     unsigned int timeout;
+    {
+        string       one_xmlrpc;
+        long long    message_size;
+        unsigned int timeout;
 
-    //     conf.get("ONE_XMLRPC", one_xmlrpc);
-    //     conf.get("MESSAGE_SIZE", message_size);
-    //     conf.get("TIMEOUT", timeout);
+        conf.get("ONE_XMLRPC", one_xmlrpc);
+        conf.get("MESSAGE_SIZE", message_size);
+        conf.get("TIMEOUT", timeout);
 
-    //     Client::initialize("", one_xmlrpc, message_size, timeout);
+        Client::initialize("", one_xmlrpc, message_size, timeout);
 
-    //     oss.str("");
+        oss.str("");
 
-    //     oss << "XML-RPC client using " << (Client::client())->get_message_size()
-    //         << " bytes for response buffer.\n";
+        oss << "XML-RPC client using " << (Client::client())->get_message_size()
+            << " bytes for response buffer.\n";
 
-    //     NebulaLog::log("MON", Log::INFO, oss);
-    // }
+        NebulaLog::log("MON", Log::INFO, oss);
+    }
 
-    // xmlInitParser();
+    xmlInitParser();
+
+    // -------------------------------------------------------------------------
+    // Pools
+    // -------------------------------------------------------------------------
+    int machines_limit = 100;
+    conf.get("MAX_VM", machines_limit);
+
+    // Client * client = Client::client();
+
+    // hpool  = new HostPoolXML(client);
+    // vmpool = new VirtualMachinePoolXML(client, machines_limit, false);
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them

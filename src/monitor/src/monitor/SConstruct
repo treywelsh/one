@@ -1,3 +1,5 @@
+# SConstruct for src/pool
+
 # -------------------------------------------------------------------------- #
 # Copyright 2002-2019, OpenNebula Project, OpenNebula Systems                #
 #                                                                            #
@@ -14,35 +16,39 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-Import('env')
+Import('mon_env')
 import os
 
 # This is the absolute path where the project is located
 cwd=os.getcwd()
 
-# Include dirs
-env.Append(CPPPATH=[
-    cwd + '/include/',
+# Build library
+lib_name='nebula_monitor'
+source_files=[
+    'Monitor.cc',
+    'MonitorTemplate.cc']
+mon_env.StaticLibrary(lib_name, source_files)
+
+# Build daemon
+mon_env.Prepend(LIBS=[
+    'nebula_monitor',
+    'nebula_log',
+    'nebula_common',
+    'nebula_client',
+    'nebula_template',
+    'nebula_parsers',
+    'crypto',
+    'nebula_xml',
+    'nebula_host'
 ])
 
-# Library dirs
+if not mon_env.GetOption('clean'):
+    env_xmlrpc_flags = "LDFLAGS='%s' CXXFLAGS='%s' CPPFLAGS='%s'" % (
+                       os.environ.get('LDFLAGS', ''),
+                       os.environ.get('CXXFLAGS', ''),
+                       os.environ.get('CPPFLAGS', ''))
 
-env.Append(LIBPATH=[
-    cwd+'/src/data_model',
-    cwd+'/src/protocol',
-    cwd+'/src/monitor'
-])
+    mon_env.ParseConfig("%s ../../../../share/scons/get_xmlrpc_config client" % (
+                        env_xmlrpc_flags,))
 
-################################################################################
-# SCONS scripts to build
-################################################################################
-
-build_scripts=[
-    'src/data_model/SConstruct',
-    'src/protocol/SConstruct',
-    'src/monitor/SConstruct'
-]
-
-for script in build_scripts:
-    mon_env=env.Clone()
-    SConscript(script, exports='mon_env')
+mon_env.Program('onemonitor.cc')
