@@ -15,29 +15,24 @@
 /* -------------------------------------------------------------------------- */
 
 #include "HostBase.h"
-#include "GroupPool.h"
-
-// #include <math.h>
-// #include <sstream>
-// #include <stdexcept>
-// #include <iomanip>
-
-// #include "NebulaUtil.h"
-// #include "NebulaLog.h"
+// #include "GroupPool.h"
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 using namespace std;
 
-int HostBase::from_xml(const string& xml)
+static const int ONEADMIN_ID = 0;
+static const char* ONEADMIN_NAME = "oneadmin";
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int HostBase::init_attributes()
 {
     int int_state;
     int int_prev_state;
     int rc = 0;
-
-    // Initialize the internal XML object
-    update_from_str(xml);
 
     // Get class base attributes
     rc += xpath(oid, "/HOST/ID", -1);
@@ -58,7 +53,11 @@ int HostBase::from_xml(const string& xml)
 
     // Set the owner and group to oneadmin
     set_user(0, "");
-    set_group(GroupPool::ONEADMIN_ID, GroupPool::ONEADMIN_NAME);
+    // ONEADMIN_ID and ONEADMIN_NAME defined locally, as using definitions
+    // from GroupPool force linking of nebula_group, nebula_acl, nebula_rm,
+    // nebula_um, nebula_vm and others.
+    // set_group(GroupPool::ONEADMIN_ID, GroupPool::ONEADMIN_NAME);
+    set_group(ONEADMIN_ID, ONEADMIN_NAME);
 
     // ------------ Host Share ---------------
     vector<xmlNodePtr> content;
@@ -102,10 +101,29 @@ int HostBase::from_xml(const string& xml)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+int HostBase::from_xml(const std::string &xml_str)
+{
+    int rc = update_from_str(xml_str);
+
+    if (rc != 0)
+    {
+        return rc;
+    }
+
+    return init_attributes();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 string HostBase::to_xml() const
 {
+    // todo
     return "";
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 ostream& operator<<(ostream& o, const HostBase& host)
 {

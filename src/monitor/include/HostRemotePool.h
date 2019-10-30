@@ -14,30 +14,42 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_H_
-#define MONITOR_H_
 
-#include <thread>
+#ifndef HOST_REMOTE_POOL_H_
+#define HOST_REMOTE_POOL_H_
 
-#include "HostRemotePool.h"
-// #include "VirtualMachinePoolXML.h"
+#include "HostBase.h"
+#include "RemotePool.h"
 
-class Monitor
+// Provides list of HostBase objects
+class HostRemotePool : public RemotePool
 {
 public:
-    void start();
+    HostRemotePool()
+    : RemotePool()
+    {}
 
-    void thread_execute();
+    HostBase* get(int oid) const
+    {
+        return RemotePool::get<HostBase>(oid);
+    }
+
+protected:
+    int load_info(xmlrpc_c::value &result) override;
+
+    int get_nodes(const ObjectXML& xml,
+        std::vector<xmlNodePtr>& content) const override
+    {
+        // todo Limit the list only to active hosts?
+        // return xml.get_nodes("/HOST_POOL/HOST[STATE=1 or STATE=2]", content);
+        return xml.get_nodes("/HOST_POOL/HOST", content);
+    }
+
+    void add_object(xmlNodePtr node)
+    {
+        RemotePool::add_object<HostBase>(node);
+    }
 private:
-    std::thread*       monitor_thread = nullptr;
-
-    // ---------------------------------------------------------------
-    // Pools
-    // ---------------------------------------------------------------
-    HostRemotePool *               hpool = nullptr;
-    // VirtualMachinePoolXML *     vmpool = nullptr;
-
-    bool terminate = false;
 };
 
-#endif
+#endif // HOST_REMOTE_POOL_H_

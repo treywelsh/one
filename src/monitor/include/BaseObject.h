@@ -24,7 +24,7 @@
 class BaseObject : public ObjectXML
 {
 public:
-    explicit BaseObject()
+    BaseObject()
     {
     }
 

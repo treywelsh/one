@@ -131,9 +131,7 @@ void Monitor::start()
     int machines_limit = 100;
     conf.get("MAX_VM", machines_limit);
 
-    // Client * client = Client::client();
-
-    // hpool  = new HostPoolXML(client);
+    hpool  = new HostRemotePool();
     // vmpool = new VirtualMachinePoolXML(client, machines_limit, false);
 
     // -----------------------------------------------------------
@@ -174,8 +172,9 @@ void Monitor::start()
     // Create the monitor loop
     // -----------------------------------------------------------
 
-    // NebulaLog::log("MON", Log::INFO, "Starting monitor loop...");
+    NebulaLog::log("MON", Log::INFO, "Starting monitor loop...");
 
+    monitor_thread = new std::thread(&Monitor::thread_execute, this);
     // pthread_attr_t pattr;
     // pthread_attr_init(&pattr);
     // pthread_attr_setdetachstate(&pattr, PTHREAD_CREATE_JOINABLE);
@@ -201,11 +200,30 @@ void Monitor::start()
 
     sigwait(&mask, &signal);
 
+    terminate = true;
     //am.finalize();
 
-    //pthread_join(sched_thread, 0);
+    monitor_thread->join();
 
     xmlCleanupParser();
 
     NebulaLog::finalize_log_system();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::thread_execute()
+{
+    while (!terminate)
+    {
+        hpool->update();
+        auto hosts = hpool->get_objects();
+        NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
+        for (auto o : hosts)
+        {
+            NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
+        }
+        sleep(5);
+    }
 }

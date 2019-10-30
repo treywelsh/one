@@ -33,11 +33,21 @@ class HostBase : public BaseObject, public ClusterableSingle
 {
 public:
     explicit HostBase(const std::string &xml_string)
-    : BaseObject()
-    , ClusterableSingle(-1, "")
-    , vm_ids("VMS")
+        : ClusterableSingle(-1, "")
     {
-        from_xml(xml_string);
+        // Initialize the internal XML object
+        update_from_str(xml_string);
+
+        init_attributes();
+    }
+
+    explicit HostBase(const xmlNodePtr node)
+        : ClusterableSingle(-1, "")
+    {
+        // Initialize the internal XML object
+        update_from_node(node);
+
+        init_attributes();
     }
 
     int get_cid() const
@@ -83,6 +93,8 @@ public:
         return public_cloud;
     }
 
+    int init_attributes();
+
     /**
      * Rebuilds the object from an xml formatted string
      * @param xml_str The xml-formatted string
@@ -103,18 +115,18 @@ public:
     friend ostream& operator<<(ostream& o, const HostBase& host);
 
 private:
-    Host::HostState state           = Host::HostState::INIT;
-    Host::HostState prev_state      = Host::HostState::INIT;
-    std::string     vmm_mad_name;
-    std::string     im_mad_name;
-    time_t          last_monitored  = 0;
-    bool            public_cloud    = false;
+    Host::HostState  state          = Host::HostState::INIT;
+    Host::HostState  prev_state     = Host::HostState::INIT;
+    std::string      vmm_mad_name;
+    std::string      im_mad_name;
+    time_t           last_monitored = 0;
+    bool             public_cloud   = false;
 
     // HostShare includes Host, uses it only for two methods
     // these methods should be refactored to remove Host dependency
-    HostShare host_share;
-    ObjectCollection vm_ids;
-    Template obj_template;
+    HostShare        host_share;
+    ObjectCollection vm_ids{"VMS"};
+    Template         obj_template;
 };
 
 #endif // HOST_BASE_H_

@@ -14,30 +14,56 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_H_
-#define MONITOR_H_
+#include "RemotePool.h"
 
-#include <thread>
-
-#include "HostRemotePool.h"
-// #include "VirtualMachinePoolXML.h"
-
-class Monitor
+int RemotePool::update()
 {
-public:
-    void start();
+    clear();
 
-    void thread_execute();
-private:
-    std::thread*       monitor_thread = nullptr;
+    // ---------------------------------------------------------------------
+    // Load the ids (to get an updated list of the pool)
+    // ---------------------------------------------------------------------
 
-    // ---------------------------------------------------------------
-    // Pools
-    // ---------------------------------------------------------------
-    HostRemotePool *               hpool = nullptr;
-    // VirtualMachinePoolXML *     vmpool = nullptr;
+    xmlrpc_c::value result;
 
-    bool terminate = false;
-};
+    int rc = load_info(result);
 
-#endif
+    if (rc != 0)
+    {
+        NebulaLog::log("POOL", Log::ERROR,
+                        "Could not retrieve pool info from ONE");
+        return -1;
+    }
+
+    vector<xmlrpc_c::value> values =
+                    xmlrpc_c::value_array(result).vectorValueValue();
+
+    bool   success = xmlrpc_c::value_boolean(values[0]);
+    string message = xmlrpc_c::value_string(values[1]);
+
+    if ( !success )
+    {
+        ostringstream oss;
+
+        oss << "ONE returned error while retrieving pool info:" << endl;
+        oss << message;
+
+        NebulaLog::log("POOL", Log::ERROR, oss);
+        return -1;
+    }
+
+    ObjectXML xml(message);
+
+    vector<xmlNodePtr> nodes;
+
+    get_nodes(xml, nodes);
+
+    for (auto node : nodes)
+    {
+        add_object(node);
+    }
+
+    xml.free_nodes(nodes);
+
+    return 0;
+}

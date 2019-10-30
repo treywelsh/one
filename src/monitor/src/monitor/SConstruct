@@ -32,14 +32,22 @@ mon_env.StaticLibrary(lib_name, source_files)
 # Build daemon
 mon_env.Prepend(LIBS=[
     'nebula_monitor',
+    'nebula_data_model',
+    'nebula_host',
+    # 'nebula_group',
+    # 'nebula_acl',
+    # 'nebula_rm',
+    # 'nebula_um',
+    # 'nebula_vm',
+    'nebula_pool',
     'nebula_log',
     'nebula_common',
     'nebula_client',
     'nebula_template',
+    'nebula_xml',
     'nebula_parsers',
     'crypto',
-    'nebula_xml',
-    'nebula_host'
+#    'xml2'
 ])
 
 if not mon_env.GetOption('clean'):

@@ -14,30 +14,26 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_H_
-#define MONITOR_H_
-
-#include <thread>
-
 #include "HostRemotePool.h"
-// #include "VirtualMachinePoolXML.h"
 
-class Monitor
+int HostRemotePool::load_info(xmlrpc_c::value &result)
 {
-public:
-    void start();
+    try
+    {
+        client->call("one.hostpool.info", "", &result);
 
-    void thread_execute();
-private:
-    std::thread*       monitor_thread = nullptr;
+        return 0;
+    }
+    catch (exception const& e)
+    {
+        ostringstream   oss;
+        oss << "Exception raised: " << e.what();
 
-    // ---------------------------------------------------------------
-    // Pools
-    // ---------------------------------------------------------------
-    HostRemotePool *               hpool = nullptr;
-    // VirtualMachinePoolXML *     vmpool = nullptr;
+        NebulaLog::log("HOST", Log::ERROR, oss);
 
-    bool terminate = false;
-};
+        return -1;
+    }
+}
 
-#endif
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
