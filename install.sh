@@ -2238,7 +2238,8 @@ ONEFLOW_LIB_FILES="src/flow/lib/grammar.rb \
                     src/flow/lib/log.rb \
                     src/flow/lib/models.rb \
                     src/flow/lib/strategy.rb \
-                    src/flow/lib/validator.rb"
+                    src/flow/lib/validator.rb \
+                    src/flow/lib/EventManager.rb"
 
 ONEFLOW_LIB_STRATEGY_FILES="src/flow/lib/strategy/straight.rb"
 

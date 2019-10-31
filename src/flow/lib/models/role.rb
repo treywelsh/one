@@ -19,29 +19,32 @@ require 'treetop/version'
 require 'grammar'
 require 'parse-cron'
 
-if !(Gem::Version.create(Treetop::VERSION::STRING) >= Gem::Version.create('1.6.3'))
-    raise "treetop gem version must be >= 1.6.3. Current version is #{Treetop::VERSION::STRING}"
+if !(Gem::Version.create('1.6.3') < Gem.loaded_specs['treetop'].version)
+    raise 'treetop gem version must be >= 1.6.3.'\
+          "Current version is #{Treetop::VERSION::STRING}"
 end
 
 module OpenNebula
+
+    # Service Role class
     class Role
 
         # Actions that can be performed on the VMs of a given Role
-        SCHEDULE_ACTIONS = [
-            'terminate',
-            'terminate-hard',
-            'undeploy',
-            'undeploy-hard',
-            'hold',
-            'release',
-            'stop',
-            'suspend',
-            'resume',
-            'reboot',
-            'reboot-hard',
-            'poweroff',
-            'poweroff-hard',
-            'snapshot-create'
+        SCHEDULE_ACTIONS = %w[
+            terminate
+            terminate-hard
+            undeploy
+            undeploy-hard
+            hold
+            release
+            stop
+            suspend
+            resume
+            reboot
+            reboot-hard
+            poweroff
+            poweroff-hard
+            snapshot-create
         ]
 
         STATE = {
@@ -60,23 +63,23 @@ module OpenNebula
             'FAILED_DELETING'    => 12
         }
 
-        STATE_STR = [
-            'PENDING',
-            'DEPLOYING',
-            'RUNNING',
-            'UNDEPLOYING',
-            'WARNING',
-            'DONE',
-            'FAILED_UNDEPLOYING',
-            'FAILED_DEPLOYING',
-            'SCALING',
-            'FAILED_SCALING',
-            'COOLDOWN',
-            'DELETING',
-            'FAILED_DELETING'
+        STATE_STR = %w[
+            PENDING
+            DEPLOYING
+            RUNNING
+            UNDEPLOYING
+            WARNING
+            DONE
+            FAILED_UNDEPLOYING
+            FAILED_DEPLOYING
+            SCALING
+            FAILED_SCALING
+            COOLDOWN
+            DELETING
+            FAILED_DELETING
         ]
 
-        LOG_COMP = "ROL"
+        LOG_COMP = 'ROL'
 
         def initialize(body, service)
             @body       = body
@@ -87,33 +90,42 @@ module OpenNebula
         end
 
         def name
-            return @body['name']
+            @body['name']
         end
 
         # Returns the role state
         # @return [Integer] the role state
         def state
-            return @body['state'].to_i
+            @body['state'].to_i
         end
 
         # Returns the role parents
         # @return [Array] the role parents
         def parents
-            return @body['parents'] || []
+            @body['parents'] || []
         end
 
         # Returns the role cardinality
         # @return [Integer] the role cardinality
         def cardinality
-            return @body['cardinality'].to_i
+            @body['cardinality'].to_i
         end
 
         # Sets a new cardinality for this role
         # @param [Integer] the new cardinality
+        # rubocop:disable Naming/AccessorMethodName
         def set_cardinality(target_cardinality)
-            dir = target_cardinality > cardinality ? "up" : "down"
-            msg = "Role #{name} scaling #{dir} from #{cardinality} to #{target_cardinality} nodes"
-            Log.info LOG_COMP, msg, @service.id()
+            # rubocop:enable Naming/AccessorMethodName
+            if target_cardinality > cardinality
+                dir = 'up'
+            else
+                dir = 'down'
+            end
+
+            msg = "Role #{name} scaling #{dir} from #{cardinality} to "\
+                  "#{target_cardinality} nodes"
+
+            Log.info LOG_COMP, msg, @service.id
             @service.log_info(msg)
 
             @body['cardinality'] = target_cardinality.to_i
@@ -121,7 +133,7 @@ module OpenNebula
 
         # Updates the cardinality with the current number of nodes
         def update_cardinality()
-            @body['cardinality'] = @body['nodes'].size()
+            @body['cardinality'] = @body['nodes'].size
         end
 
         # Returns the role max cardinality
@@ -129,9 +141,9 @@ module OpenNebula
         def max_cardinality
             max = @body['max_vms']
 
-            return nil if max.nil?
+            return if max.nil?
 
-            return max.to_i
+            max.to_i
         end
 
         # Returns the role min cardinality
@@ -139,27 +151,33 @@ module OpenNebula
         def min_cardinality
             min = @body['min_vms']
 
-            return nil if min.nil?
+            return if min.nil?
 
-            return min.to_i
+            min.to_i
         end
 
         # Returns the string representation of the service state
         # @return [String] the state string
         def state_str
-            return STATE_STR[state]
+            STATE_STR[state]
         end
 
         # Returns the nodes of the role
         # @return [Array] the nodes
-        def get_nodes
+        def nodes
             @body['nodes']
+        end
+
+        def nodes_ids
+            @body['nodes'].map {|node| node['deploy_id'] }
         end
 
         # Sets a new state
         # @param [Integer] the new state
         # @return [true, false] true if the value was changed
+        # rubocop:disable Naming/AccessorMethodName
         def set_state(state)
+            # rubocop:enable Naming/AccessorMethodName
             if state < 0 || state > STATE_STR.size
                 return false
             end
@@ -177,9 +195,11 @@ module OpenNebula
                 end
             end
 
-            Log.info LOG_COMP, "Role #{name} new state: #{STATE_STR[state]}", @service.id()
+            Log.info LOG_COMP,
+                     "Role #{name} new state: #{STATE_STR[state]}",
+                     @service.id
 
-            return true
+            true
         end
 
         # Retrieves the VM information for each Node in this Role. If a Node
@@ -200,8 +220,9 @@ module OpenNebula
                 rc = vm.info
 
                 if OpenNebula.is_error?(rc)
-                    msg = "Role #{name} : VM #{vm_id} monitorization failed; #{rc.message}"
-                    Log.error LOG_COMP, msg, @service.id()
+                    msg = "Role #{name} : VM #{vm_id} "\
+                          "monitorization failed; #{rc.message}"
+                    Log.error LOG_COMP, msg, @service.id
                     @service.log_error(msg)
 
                     success = false
@@ -219,7 +240,7 @@ module OpenNebula
 
                     if running && @service.ready_status_gate
                         running_status = node['vm_info']['VM']['USER_TEMPLATE']['READY'] || ""
-                        running = running_status.upcase == "YES"
+                        running = running_status.upcase == 'YES'
                     end
 
                     node['running'] = running
@@ -242,7 +263,7 @@ module OpenNebula
             @body['nodes'] = new_nodes
 
             if !success
-                return OpenNebula::Error.new()
+                return OpenNebula::Error.new
             end
 
             return nil
@@ -253,7 +274,7 @@ module OpenNebula
         # were created, false and the error reason if there was a problem
         # creating the VMs
         def deploy(scale_up=false)
-            n_nodes = cardinality() - get_nodes.size
+            n_nodes = cardinality() - nodes.size
 
             @body['last_vmname'] ||= 0
 
@@ -351,7 +372,7 @@ module OpenNebula
         def shutdown(scale_down=false)
             success = true
 
-            nodes = get_nodes
+            nodes = nodes
 
             if scale_down
                 n_nodes = nodes.size - cardinality()
@@ -368,7 +389,7 @@ module OpenNebula
         # @return [Array<true, nil>] All the VMs are deleted, and the return
         #   ignored
         def delete
-            get_nodes.each do |node|
+            nodes.each do |node|
                 vm_id = node['deploy_id']
 
                 Log.debug LOG_COMP, "Role #{name} : Deleting VM #{vm_id}", @service.id()
@@ -404,7 +425,7 @@ module OpenNebula
         #   were updated, false and the error reason if there was a problem
         #   updating the VMs
         def chown(uid, gid)
-            get_nodes.each { |node|
+            nodes.each { |node|
                 vm_id = node['deploy_id']
 
                 Log.debug LOG_COMP, "Role #{name} : Chown for VM #{vm_id}", @service.id()
@@ -573,7 +594,7 @@ module OpenNebula
         def scale()
             n_nodes = 0
 
-            get_nodes.each do |node|
+            nodes.each do |node|
                 n_nodes += 1 if node['disposed'] != "1"
             end
 
@@ -689,10 +710,107 @@ module OpenNebula
             retry_scale()
         end
 
+        ########################################################################
+        # Nodes info
+        ########################################################################
+
+        # Determine if the role nodes are running
+        # @return [true|false]
+        def nodes_running?
+            if nodes.size != cardinality
+                return false
+            end
+
+            nodes.each do |node|
+                return false unless node && node['running']
+            end
+
+            true
+        end
+
+        # Returns true if any VM is in UNKNOWN or FAILED
+        # @return [true|false]
+        def nodes_warning?
+            nodes.each do |node|
+                next unless node && node['vm_info']
+
+                vm_state = node['vm_info']['VM']['STATE']
+                lcm_state = node['vm_info']['VM']['LCM_STATE']
+
+                # Failure or UNKNOWN
+                if vm_failure?(node) || (vm_state == '3' && lcm_state == '16')
+                    return true
+                end
+            end
+
+            false
+        end
+
+        def nodes_done?
+            nodes.each do |node|
+                if node && node['vm_info']
+                    vm_state = node['vm_info']['VM']['STATE']
+
+                    if vm_state != '6' # DONE
+                        return false
+                    end
+                else
+                    return false
+                end
+            end
+
+            true
+        end
+
+        # Determine if any of the role nodes failed
+        # @param [Role] role
+        # @return [true|false]
+        def any_node_failed?
+            nodes.each do |node|
+                if vm_failure?(node)
+                    return true
+                end
+            end
+
+            false
+        end
+
+        # Determine if any of the role nodes failed to scale
+        # @return [true|false]
+        def any_node_failed_scaling?
+            nodes.each do |node|
+                if  node && node['vm_info'] &&
+                    (node['disposed'] == '1' || node['scale_up'] == '1') &&
+                    vm_failure?(node)
+
+                    return true
+                end
+            end
+
+            false
+        end
+
+        def role_finished_scaling?
+            nodes.each { |node|
+                # For scale up, check new nodes are running, or past running
+                if node
+                    if node['scale_up'] == '1'
+                        return false if !node['running']
+                    end
+                else
+                    return false
+                end
+            }
+
+            # TODO: If a shutdown ends in running again (VM doesn't have acpi),
+            # the role/service will stay in SCALING
+
+            # For scale down, it will finish when scaling nodes are deleted
+            return nodes.size() == cardinality()
+        end
 
         ########################################################################
         ########################################################################
-
 
         private
 
@@ -885,13 +1003,13 @@ module OpenNebula
         # For a failed scale up, the cardinality is updated to the actual value
         # For a failed scale down, the shutdown actions are retried
         def retry_scale()
-            nodes_dispose = get_nodes.select { |node|
+            nodes_dispose = nodes.select { |node|
                 node['disposed'] == "1"
             }
 
             shutdown_nodes(nodes_dispose, true)
 
-            set_cardinality( get_nodes.size() - nodes_dispose.size() )
+            set_cardinality(nodes.size - nodes_dispose.size)
         end
 
         # Deletes VMs in DONE or FAILED, and sends a resume action to VMs in UNKNOWN
@@ -1009,5 +1127,16 @@ module OpenNebula
             }
         end
 
+        def vm_failure?(node)
+            if node && node['vm_info']
+                return Role.vm_failure?(
+                    vm_state = node['vm_info']['VM']['STATE'],
+                    lcm_state = node['vm_info']['VM']['LCM_STATE'])
+            end
+
+            false
+        end
+
     end
+
 end

@@ -54,6 +54,9 @@ require 'CloudServer'
 require 'models'
 require 'log'
 
+require 'LifeCycleManager'
+require 'EventManager'
+
 DEFAULT_VM_NAME_TEMPLATE = '$ROLE_NAME_$VM_NUMBER_(service_$SERVICE_ID)'
 
 ##############################################################################
@@ -110,7 +113,6 @@ set :cloud_auth, cloud_auth
 # Helpers
 ##############################################################################
 
-
 before do
     auth = Rack::Auth::Basic::Request.new(request.env)
 
@@ -136,16 +138,14 @@ Role.init_default_vm_name_template(conf[:vm_name_template])
 ServiceTemplate.init_default_vn_name_template(conf[:vn_name_template])
 
 ##############################################################################
-# LCM thread
+# LCM and Event Manager
 ##############################################################################
 
-t = Thread.new {
-    require 'LifeCycleManager'
+lcm = ServiceLCM.new(10, cloud_auth)
+em  = EventManager.new(10)
 
-    ServiceLCM.new(conf[:lcm_interval], cloud_auth).loop
-}
-t.abort_on_exception = true
-
+lcm.event_manager = em.am
+em.lcm = lcm.am
 
 ##############################################################################
 # Service
@@ -183,10 +183,45 @@ delete '/service/:id' do
 
     rc = nil
     service = service_pool.get(params[:id]) { |service|
-        service.set_state(Service::STATE['DELETING'])
-        service.delete_roles
+        next if service.state == Service::STATE['DELETING']
 
+        service.set_state(Service::STATE['DELETING'])
         rc = service.update
+
+        Thread.new do
+            context    = ZMQ::Context.new(1)
+            subscriber = context.socket(ZMQ::SUB)
+
+            service_json = JSON.parse(service.to_json)
+            vm_ids = service_json['DOCUMENT']['TEMPLATE']['BODY']['roles']
+                     .flat_map do |role| role['nodes']
+                         .flat_map { |node| node['deploy_id']}
+                     end
+
+            vm_ids.each do |id|
+                subscriber.setsockopt(ZMQ::SUBSCRIBE, "EVENT STATE VM/DONE/LCM_INIT/#{id}")
+            end
+
+            subscriber.connect("tcp://localhost:2101")
+
+            service.delete_roles
+
+            while !vm_ids.empty?
+                key     =''
+                content = ''
+                subscriber.recv_string(key)
+                subscriber.recv_string(content)
+
+                vm_id = key.split[2].split('/')[3].to_i
+
+                vm_ids.delete(vm_id)
+            end
+
+            subscriber.close
+            service.delete
+
+        end
+
         if OpenNebula.is_error?(rc)
             Log.error LOG_COMP, 'Error trying to update ' \
                                 "Service #{service.id()} : #{rc.message}"
@@ -474,7 +509,11 @@ post '/service_template/:id/action' do
                         'networks_value'
         end
 
+        # Creates service document
         service = service_template.instantiate(merge_template)
+
+        # Starts service deployment async
+        lcm.am.trigger_action(:deploy, service.id, service.id)
 
         if OpenNebula.is_error?(service)
             error CloudServer::HTTP_ERROR_CODE[service.errno], service.message

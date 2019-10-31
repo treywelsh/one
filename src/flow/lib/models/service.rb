@@ -15,7 +15,11 @@
 #--------------------------------------------------------------------------- #
 
 module OpenNebula
+
+    # Service class as wrapper of DocumentJSON
     class Service < DocumentJSON
+
+        attr_reader :roles, :client
 
         DOCUMENT_TYPE = 100
 
@@ -35,46 +39,48 @@ module OpenNebula
             'FAILED_DELETING'    => 12
         }
 
-        STATE_STR = [
-            'PENDING',
-            'DEPLOYING',
-            'RUNNING',
-            'UNDEPLOYING',
-            'WARNING',
-            'DONE',
-            'FAILED_UNDEPLOYING',
-            'FAILED_DEPLOYING',
-            'SCALING',
-            'FAILED_SCALING',
-            'COOLDOWN',
-            'DELETING',
-            'FAILED_DELETING'
+        STATE_STR = %w[
+            PENDING
+            DEPLOYING
+            RUNNING
+            UNDEPLOYING
+            WARNING
+            DONE
+            FAILED_UNDEPLOYING
+            FAILED_DEPLOYING
+            SCALING
+            FAILED_SCALING
+            COOLDOWN
+            DELETING
+            FAILED_DELETING
         ]
 
-        LOG_COMP = "SER"
+        LOG_COMP = 'SER'
 
         # Returns the service state
         # @return [Integer] the service state
         def state
-            return @body['state'].to_i
+            @body['state'].to_i
         end
 
         # Returns the service strategy
         # @return [String] the service strategy
         def strategy
-            return @body['deployment']
+            @body['deployment']
         end
 
         # Returns the string representation of the service state
         # @return the state string
         def state_str
-            return STATE_STR[state]
+            STATE_STR[state]
         end
 
         # Sets a new state
         # @param [Integer] the new state
         # @return [true, false] true if the value was changed
+        # rubocop:disable Naming/AccessorMethodName
         def set_state(state)
+            # rubocop:enable Naming/AccessorMethodName
             if state < 0 || state > STATE_STR.size
                 return false
             end
@@ -82,16 +88,16 @@ module OpenNebula
             @body['state'] = state
 
             msg = "New state: #{STATE_STR[state]}"
-            Log.info LOG_COMP, msg, self.id()
-            self.log_info(msg)
+            Log.info LOG_COMP, msg, id
+            log_info(msg)
 
-            return true
+            true
         end
 
         # Returns the owner username
         # @return [String] the service's owner username
-        def owner_name()
-            return self['UNAME']
+        def owner_name
+            self['UNAME']
         end
 
         # Replaces this object's client with a new one
@@ -100,87 +106,82 @@ module OpenNebula
             @client = owner_client
         end
 
-        # Returns all the node Roles
-        # @return [Hash<String,Role>] all the node Roles
-        def get_roles
-            return @roles
-        end
-
         # Returns true if all the nodes are correctly deployed
         # @return [true, false] true if all the nodes are correctly deployed
-        def all_roles_running?()
-            @roles.each { |name, role|
+        def all_roles_running?
+            @roles.each do |_name, role|
                 if role.state != Role::STATE['RUNNING']
                     return false
                 end
-            }
+            end
 
-            return true
+            true
         end
 
         # Returns true if all the nodes are in done state
         # @return [true, false] true if all the nodes are correctly deployed
-        def all_roles_done?()
-            @roles.each { |name, role|
+        def all_roles_done?
+            @roles.each do |_name, role|
                 if role.state != Role::STATE['DONE']
                     return false
                 end
-            }
+            end
 
-            return true
+            true
         end
 
         # Returns true if any of the roles is in failed state
         # @return [true, false] true if any of the roles is in failed state
-        def any_role_failed?()
+        def any_role_failed?
             failed_states = [
                 Role::STATE['FAILED_DEPLOYING'],
                 Role::STATE['FAILED_UNDEPLOYING'],
-                Role::STATE['FAILED_DELETING']]
+                Role::STATE['FAILED_DELETING']
+            ]
 
-            @roles.each { |name, role|
+            @roles.each do |_name, role|
                 if failed_states.include?(role.state)
                     return true
                 end
-            }
+            end
 
-            return false
+            false
         end
 
         # Returns the running_status_vm option
         # @return [true, false] true if the running_status_vm option is enabled
         def ready_status_gate
-            return @body['ready_status_gate']
+            @body['ready_status_gate']
         end
 
-        def any_role_scaling?()
-            @roles.each do |name, role|
+        def any_role_scaling?
+            @roles.each do |_name, role|
                 if role.state == Role::STATE['SCALING']
                     return true
                 end
             end
 
-            return false
+            false
         end
 
-        def any_role_failed_scaling?()
-            @roles.each do |name, role|
+        def any_role_failed_scaling?
+            @roles.each do |_name, role|
                 if role.state == Role::STATE['FAILED_SCALING']
                     return true
                 end
             end
 
-            return false
+            false
         end
 
-        def any_role_cooldown?()
-            @roles.each do |name, role|
+        def any_role_cooldown?
+            @roles.each do |_name, role|
                 if role.state == Role::STATE['COOLDOWN']
                     return true
                 end
             end
 
-            return false
+            false
         end
 
         # Create a new service based on the template provided
@@ -192,26 +193,28 @@ module OpenNebula
             template['state'] = STATE['PENDING']
 
             if template['roles']
-                template['roles'].each { |elem|
+                template['roles'].each do |elem|
                     elem['state'] ||= Role::STATE['PENDING']
-                }
+                end
             end
 
             super(template.to_json, template['name'])
         end
 
-        # Shutdown the service. This action is called when user wants to shutdwon
-        #   the Service
+        # Shutdown the service. This action is called when user wants to
+        # shutdwon the Service
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
         def shutdown
             if ![Service::STATE['FAILED_SCALING'],
-                    Service::STATE['DONE']].include?(self.state)
-                self.set_state(Service::STATE['UNDEPLOYING'])
-                return self.update
+                 Service::STATE['DONE']].include?(state)
+
+                set_state(Service::STATE['UNDEPLOYING'])
+
+                update
             else
-                return OpenNebula::Error.new("Action shutdown: Wrong state" \
-                    " #{self.state_str()}")
+                OpenNebula::Error.new('Action shutdown: Wrong state' \
+                                      " #{state_str}")
             end
         end
 
@@ -219,57 +222,57 @@ module OpenNebula
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
         def recover
-            if [Service::STATE['FAILED_DEPLOYING']].include?(self.state)
-                @roles.each do |name, role|
+            if [Service::STATE['FAILED_DEPLOYING']].include?(state)
+                @roles.each do |_name, role|
                     if role.state == Role::STATE['FAILED_DEPLOYING']
                         role.set_state(Role::STATE['PENDING'])
-                        role.recover_deployment()
+                        role.recover_deployment
                     end
                 end
 
-                self.set_state(Service::STATE['DEPLOYING'])
+                set_state(Service::STATE['DEPLOYING'])
 
-            elsif self.state == Service::STATE['FAILED_SCALING']
-                @roles.each do |name, role|
+            elsif state == Service::STATE['FAILED_SCALING']
+                @roles.each do |_name, role|
                     if role.state == Role::STATE['FAILED_SCALING']
-                        role.recover_scale()
+                        role.recover_scale
                         role.set_state(Role::STATE['SCALING'])
                     end
                 end
 
-                self.set_state(Service::STATE['SCALING'])
+                set_state(Service::STATE['SCALING'])
 
-            elsif self.state == Service::STATE['FAILED_UNDEPLOYING']
-                @roles.each do |name, role|
+            elsif state == Service::STATE['FAILED_UNDEPLOYING']
+                @roles.each do |_name, role|
                     if role.state == Role::STATE['FAILED_UNDEPLOYING']
                         role.set_state(Role::STATE['RUNNING'])
                     end
                 end
 
-                self.set_state(Service::STATE['UNDEPLOYING'])
+                set_state(Service::STATE['UNDEPLOYING'])
 
-            elsif self.state == Service::STATE['COOLDOWN']
-                @roles.each do |name, role|
+            elsif state == Service::STATE['COOLDOWN']
+                @roles.each do |_name, role|
                     if role.state == Role::STATE['COOLDOWN']
                         role.set_state(Role::STATE['RUNNING'])
                     end
                 end
 
-                self.set_state(Service::STATE['RUNNING'])
+                set_state(Service::STATE['RUNNING'])
 
-            elsif self.state == Service::STATE['WARNING']
-                @roles.each do |name, role|
+            elsif state == Service::STATE['WARNING']
+                @roles.each do |_name, role|
                     if role.state == Role::STATE['WARNING']
-                        role.recover_warning()
+                        role.recover_warning
                     end
                 end
 
             else
-                return OpenNebula::Error.new("Action recover: Wrong state" \
-                    " #{self.state_str()}")
+                return OpenNebula::Error.new('Action recover: Wrong state' \
+                                             " #{state_str}")
             end
 
-            return self.update
+            update
         end
 
         # Delete the service. All the VMs are also deleted from OpenNebula.
@@ -315,14 +318,14 @@ module OpenNebula
             @roles = {}
 
             if @body['roles']
-                @body['roles'].each { |elem|
+                @body['roles'].each do |elem|
                     elem['state'] ||= Role::STATE['PENDING']
                     role = Role.new(elem, self)
                     @roles[role.name] = role
-                }
+                end
             end
 
-            return nil
+            nil
         end
 
         # Add an info message in the service information that will be stored
@@ -339,15 +342,10 @@ module OpenNebula
             add_log(Logger::ERROR, message)
         end
 
-        # Retrieve the service client
-        def client
-            @client
-        end
-
         # Changes the owner/group
         #
-        # @param [Integer] uid the new owner id. Set to -1 to leave the current one
-        # @param [Integer] gid the new group id. Set to -1 to leave the current one
+        # @param [Integer] uid the new owner id. Use -1 to leave the current one
+        # @param [Integer] gid the new group id. Use -1 to leave the current one
         #
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
@@ -361,26 +359,28 @@ module OpenNebula
                 return rc
             end
 
-            @roles.each { |name, role|
+            @roles.each do |_name, role|
                 rc = role.chown(uid, gid)
 
                 break if rc[0] == false
-            }
+            end
 
             if rc[0] == false
-                self.log_error("Chown operation failed, will try to rollback all VMs to the old user and group")
-                update()
+                log_error('Chown operation failed, will try to rollback ' \
+                          'all VMs to the old user and group')
+
+                update
 
                 super(old_uid, old_gid)
 
-                @roles.each { |name, role|
+                @roles.each do |_name, role|
                     role.chown(old_uid, old_gid)
-                }
+                end
 
                 return OpenNebula::Error.new(rc[1])
             end
 
-            return nil
+            nil
         end
 
         # Updates a role
@@ -389,10 +389,11 @@ module OpenNebula
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
         def update_role(role_name, template_json)
+            if ![Service::STATE['RUNNING'], Service::STATE['WARNING']]
+               .include?(state)
 
-            if ![Service::STATE['RUNNING'], Service::STATE['WARNING']].include?(self.state)
-                return OpenNebula::Error.new("Update role: Wrong state" \
-                    " #{self.state_str()}")
+                return OpenNebula::Error.new('Update role: Wrong state' \
+                                             " #{state_str}")
             end
 
             template = JSON.parse(template_json)
@@ -402,7 +403,8 @@ module OpenNebula
             role = @roles[role_name]
 
             if role.nil?
-                return OpenNebula::Error.new("ROLE \"#{role_name}\" does not exist")
+                return OpenNebula::Error.new("ROLE \"#{role_name}\" " \
+                                             'does not exist')
             end
 
             rc = role.update(template)
@@ -416,15 +418,15 @@ module OpenNebula
 
             role.set_state(Role::STATE['SCALING'])
 
-            role.set_default_cooldown_duration()
+            role.set_default_cooldown_duration
 
-            self.set_state(Service::STATE['SCALING'])
+            set_state(Service::STATE['SCALING'])
 
-            return self.update
+            update
         end
 
-        def get_shutdown_action()
-            return @body['shutdown_action']
+        def shutdown_action
+            @body['shutdown_action']
         end
 
         # Replaces the template contents
@@ -435,7 +437,7 @@ module OpenNebula
         #
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
-        def update(template_json=nil, append=false)
+        def update(template_json = nil, append = false)
             if template_json
                 template = JSON.parse(template_json)
 
@@ -463,7 +465,7 @@ module OpenNebula
         #
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
-        def update_raw(template_raw, append=false)
+        def update_raw(template_raw, append = false)
             super(template_raw, append)
         end
 
@@ -478,7 +480,7 @@ module OpenNebula
         def add_log(severity, message)
             severity_str = Logger::SEV_LABEL[severity][0..0]
 
-            @body['log'] ||= Array.new
+            @body['log'] ||= []
             @body['log'] << {
                 :timestamp => Time.now.to_i,
                 :severity  => severity_str,
@@ -488,5 +490,7 @@ module OpenNebula
             # Truncate the number of log entries
             @body['log'] = @body['log'].last(MAX_LOG)
         end
+
     end
+
 end

@@ -15,177 +15,122 @@
 #--------------------------------------------------------------------------- #
 
 require 'strategy'
+require 'ActionManager'
 
+# Service Life Cycle Manager
 class ServiceLCM
 
-    LOG_COMP = "LCM"
+    attr_writer :event_manager
+    attr_reader :am
 
-    def initialize(sleep_time, cloud_auth)
-        @sleep_time = sleep_time
+    LOG_COMP = 'LCM'
+
+    ACTIONS = {
+        'DEPLOY' => :deploy,
+        'DEPLOY_CB' => :deploy_cb
+    }
+
+    def initialize(concurrency, cloud_auth)
         @cloud_auth = cloud_auth
+        @event_manager = nil
+        @am = ActionManager.new(concurrency, true)
+        @srv_pool = ServicePool.new(@cloud_auth.client)
+
+        # Register Action Manager actions
+        @am.register_action(ACTIONS['DEPLOY'], method('deploy_action'))
+        @am.register_action(ACTIONS['DEPLOY_CB'], method('deploy_cb'))
+
+        Thread.new { @am.start_listener }
     end
 
-    def loop()
-        Log.info LOG_COMP, "Starting Life Cycle Manager"
+    ############################################################################
+    # Actions
+    ############################################################################
+    def deploy_action(service_id)
+        File.open('/tmp/loga', 'a') do |file|
+            file.write("deploy action (#{service_id})\n")
+        end
 
-        while true
-            srv_pool = ServicePool.new(@cloud_auth.client)
-
-            rc = srv_pool.info_all()
-
-            if OpenNebula.is_error?(rc)
-                Log.error LOG_COMP, "Error retrieving the Service Pool: #{rc.message}"
-            else
-                srv_pool.each_xpath('DOCUMENT/ID') { |id|
-                    rc_get = srv_pool.get(id.to_i) { |service|
-                        owner_client = @cloud_auth.client(service.owner_name)
-                        service.replace_client(owner_client)
-
-                        Log.debug LOG_COMP, "Loop for service #{service.id()} #{service.name()}" \
-                                " #{service.state_str()} #{service.strategy()}"
-
-                        strategy = get_deploy_strategy(service)
-
-                        case service.state()
-                        when Service::STATE['PENDING']
-                            service.set_state(Service::STATE['DEPLOYING'])
-
-                            rc = strategy.boot_step(service)
-                            if !rc[0]
-                                service.set_state(Service::STATE['FAILED_DEPLOYING'])
-                            end
-                        when Service::STATE['DEPLOYING']
-                            strategy.monitor_step(service)
-
-                            if service.all_roles_running?
-                                service.set_state(Service::STATE['RUNNING'])
-                            elsif service.any_role_failed?
-                                service.set_state(Service::STATE['FAILED_DEPLOYING'])
-                            else
-                                rc = strategy.boot_step(service)
-                                if !rc[0]
-                                    service.set_state(Service::STATE['FAILED_DEPLOYING'])
-                                end
-                            end
-                        when Service::STATE['RUNNING'], Service::STATE['WARNING']
-                            strategy.monitor_step(service)
-
-                            if service.all_roles_running?
-                                if service.state() == Service::STATE['WARNING']
-                                    service.set_state(Service::STATE['RUNNING'])
-                                end
-                            else
-                                if service.state() == Service::STATE['RUNNING']
-                                    service.set_state(Service::STATE['WARNING'])
-                                end
-                            end
-
-                            if strategy.apply_scaling_policies(service)
-                                service.set_state(Service::STATE['SCALING'])
-
-                                rc = strategy.scale_step(service)
-                                if !rc[0]
-                                    service.set_state(Service::STATE['FAILED_SCALING'])
-                                end
-                            end
-                        when Service::STATE['SCALING']
-                            strategy.monitor_step(service)
-
-                            if service.any_role_failed_scaling?
-                                service.set_state(Service::STATE['FAILED_SCALING'])
-                            elsif service.any_role_cooldown?
-                                service.set_state(Service::STATE['COOLDOWN'])
-                            elsif !service.any_role_scaling?
-                                service.set_state(Service::STATE['RUNNING'])
-                            else
-                                rc = strategy.scale_step(service)
-                                if !rc[0]
-                                    service.set_state(Service::STATE['FAILED_SCALING'])
-                                end
-                            end
-                        when Service::STATE['COOLDOWN']
-                            strategy.monitor_step(service)
-
-                            if !service.any_role_cooldown?
-                                service.set_state(Service::STATE['RUNNING'])
-                            end
-                        when Service::STATE['FAILED_SCALING']
-                            strategy.monitor_step(service)
-
-                            if !service.any_role_failed_scaling?
-                                service.set_state(Service::STATE['SCALING'])
-                            end
-                        when Service::STATE['UNDEPLOYING']
-                            strategy.monitor_step(service)
-
-                            if service.all_roles_done?
-                                service.set_state(Service::STATE['DONE'])
-                            elsif service.any_role_failed?
-                                service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
-                            else
-                                rc = strategy.shutdown_step(service)
-                                if !rc[0]
-                                    service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
-                                end
-                            end
-                        when Service::STATE['FAILED_DEPLOYING']
-                            strategy.monitor_step(service)
-
-                            if !service.any_role_failed?
-                                service.set_state(Service::STATE['DEPLOYING'])
-                            end
-                        when Service::STATE['FAILED_UNDEPLOYING']
-                            strategy.monitor_step(service)
-
-                            if !service.any_role_failed?
-                                service.set_state(Service::STATE['UNDEPLOYING'])
-                            end
-                        when Service::STATE['DELETING']
-                            strategy.monitor_step(service)
-
-                            if service.all_roles_done?
-                                service.delete
-                            elsif service.any_role_failed?
-                                service.set_state(Service::STATE['FAILED_DELETING'])
-                            end
-                        when Service::STATE['FAILED_DELETING']
-                            strategy.monitor_step(service)
-
-                            if !service.any_role_failed?
-                                service.set_state(Service::STATE['DELETING'])
-                            end
-                        end
-
-                        rc = service.update
-                        if OpenNebula.is_error?(rc)
-                            Log.error LOG_COMP, 'Error trying to update ' \
-                                                "Service #{service.id()} : #{rc.message}"
-                        end
-                    }
-
-                    if OpenNebula.is_error?(rc_get)
-                      Log.error LOG_COMP, "Error getting Service " <<
-                        "#{id}: #{rc_get.message}"
-                    end
-              }
+        @srv_pool.get(service_id) do |service|
+            File.open('/tmp/loga', 'a') do |file|
+                file.write("deploy action loop\n")
             end
 
-            sleep @sleep_time
+            set_deploy_strategy(service)
+
+            roles = service.roles_deploy
+
+            # Maybe roles.empty? because are being deploying in other threads
+            if roles.empty? && service.all_roles_running?
+                service.set_state(Service::STATE['RUNNING'])
+                service.update
+                break
+            end
+
+            # TODO, What if there is no roles?
+
+            service.set_state(Service::STATE['DEPLOYING'])
+
+            roles.each do |_name, role|
+                role.set_state(Role::STATE['DEPLOYING'])
+                role.deploy
+
+                @event_manager.trigger_action(:wait_deploy,
+                                              service.id,
+                                              service.id,
+                                              role.name,
+                                              role.nodes_ids)
+            end
+
+            service.update
+        end
+
+        File.open('/tmp/loga', 'a') do |file|
+            file.write("deploy action (something went wrong)\n")
         end
     end
 
-private
+    ############################################################################
+    # Callbacks
+    ############################################################################
+
+    def deploy_cb(service_id, role_name, result)
+        File.open('/tmp/loga', 'a') do |file|
+            file.write("deploy cb (#{role_name})\n")
+        end
+        @srv_pool.get(service_id) do |service|
+            if !result
+                service.set_state(Service::STATE['ERROR_DEPLOYING'])
+                service.update
+                break
+            end
+
+            service.roles[role_name].set_state(Role::STATE['RUNNING'])
+
+            if service.all_roles_running?
+                service.set_state(Service::STATE['RUNNING'])
+            elsif service.instance_of?(Straight)
+                @am.trigger_action(:deploy, service.id, service)
+            end
+
+            service.update
+        end
+        File.open('/tmp/loga', 'a') do |file|
+            file.write("deploy cb end (#{role_name})\n")
+        end
+    end
+
     # Returns the deployment strategy for the given Service
     # @param [Service] service the service
-    # @return [Strategy] the deployment Strategy
-    def get_deploy_strategy(service)
-        strategy = Strategy.new
-
+    # rubocop:disable Naming/AccessorMethodName
+    def set_deploy_strategy(service)
+        # rubocop:enable Naming/AccessorMethodName
         case service.strategy
         when 'straight'
-            strategy.extend(Straight)
+            service.extend(Straight)
+        else
+            service.extend(Strategy)
         end
-
-        return strategy
     end
+
 end
