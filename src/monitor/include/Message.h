@@ -18,10 +18,42 @@
 #define MONITOR_MESSAGE_H
 
 #include <unistd.h>
+
 #include <string>
 #include <iostream>
+#include <sstream>
 
 #include "EnumString.h"
+
+void base64_decode(const std::string& in, std::string& out);
+
+int base64_encode(const std::string& in, std::string &out);
+
+int zlib_decompress(const std::string& in, std::string& out);
+
+int zlib_compress(const std::string& in, std::string& out);
+
+/**
+ * Messages between the Monitor daemon and drivers
+ */
+enum class DriverMessages : unsigned short int
+{
+    MONITOR_VM   = 0,
+    MONITOR_HOST = 1,
+    SYSTEM_HOST  = 2,
+    STATE_VM     = 3,
+    UNDEFINED    = 4
+};
+
+/**
+ * Messages between the Monitor daemon and OpenNebula daemon
+ */
+enum class OnedMessages : unsigned short int
+{
+    ADD_HOST  = 0,
+    DEL_HOST  = 1,
+    UNDEFINED = 4
+};
 
 /**
  *  This class represents a generic message used by the Monitoring Protocol.
@@ -37,29 +69,80 @@
  *    '\n' End of message delimiter
  *
  */
-class MonitorMessage
+template<typename E>
+class Message
 {
 public:
-
-    enum class Type : unsigned short int
-    {
-        MONITOR_VM   = 0,
-        MONITOR_HOST = 1,
-        SYSTEM_HOST  = 2,
-        STATE_VM     = 3,
-        UNDEFINED    = 4
-    };
-
     /**
      *  Parse the Message from an input string
      *    @param input string with the message
      */
-    int parse_from(const std::string& input);
+    int parse_from(const std::string& input)
+    {
+        std::istringstream is(input);
+        std::string buffer, payloaz;
+
+        _type = E::UNDEFINED;
+        _payload.clear();
+
+        if (!is.good())
+        {
+            return -1;
+        }
+
+        is >> buffer >> std::ws;
+
+        _type = type_str._from_str(buffer.c_str());
+
+        if ( !is.good() || _type == E::UNDEFINED )
+        {
+            return -1;
+        }
+
+        buffer.clear();
+
+        is >> buffer >> std::ws;
+
+        base64_decode(buffer, payloaz);
+
+        if ( zlib_decompress(payloaz, _payload) == -1 )
+        {
+            _type = E::UNDEFINED;
+            _payload.clear();
+
+            return -1;
+        }
+
+        return 0;
+    }
 
     /**
      *  Writes this object to the given string
      */
-    int write_to(std::string& output) const;
+    int write_to(std::string& out) const
+    {
+        out.clear();
+
+        std::string payloaz;
+        std::string payloaz64;
+
+        if (zlib_compress(_payload, payloaz) == -1)
+        {
+            return -1;
+        }
+
+        if ( base64_encode(payloaz, payloaz64) == -1)
+        {
+            return -1;
+        }
+
+        out = type_str._to_str(_type);
+        out += ' ';
+        out += payloaz64;
+        out += '\n';
+
+        return 0;
+    }
 
     /**
      *  Writes this object to the given file descriptor
@@ -98,12 +181,12 @@ public:
     /**
      *
      */
-    Type type()
+    E type() const
     {
         return _type;
     }
 
-    void type(Type t)
+    void type(E t)
     {
         _type = t;
     }
@@ -111,7 +194,7 @@ public:
     /**
      *
      */
-    const std::string& payload()
+    const std::string& payload() const
     {
         return _payload;
     }
@@ -122,19 +205,21 @@ public:
     }
 
 private:
-    static const EString<Type> type_str;
-
-    Type _type;
+    /**
+     *  Message fields
+     */
+    E _type;
 
     std::string _payload;
 
-    static void base64_decode(const std::string& in, std::string& out);
-
-    static int base64_encode(const std::string& in, std::string &out);
-
-    static int zlib_decompress(const std::string& in, std::string& out);
-
-    static int zlib_compress(const std::string& in, std::string& out);
+    static const EString<E> type_str;
 };
+
+/**
+ *  Message types
+ */
+typedef Message<DriverMessages> DriverMessage;
+
+typedef Message<OnedMessages> OnedMessage;
 
 #endif /*MONITOR_MESSAGE_H_*/

@@ -16,90 +16,25 @@
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
-
 #include <zlib.h>
 
-#include <sstream>
+#include "Message.h"
 
-#include "MonitorMessage.h"
-
-const EString<MonitorMessage::Type> MonitorMessage::type_str({
-    {"MONITOR_VM", Type::MONITOR_VM},
-    {"MONITOR_HOST", Type::MONITOR_HOST},
-    {"SYSTEM_HOST", Type::SYSTEM_HOST},
-    {"STATE_VM", Type::STATE_VM},
-    {"UNDEFINED", Type::UNDEFINED}
+template<>
+const EString<DriverMessages> Message<DriverMessages>::type_str({
+    {"MONITOR_VM", DriverMessages::MONITOR_VM},
+    {"MONITOR_HOST", DriverMessages::MONITOR_HOST},
+    {"SYSTEM_HOST", DriverMessages::SYSTEM_HOST},
+    {"STATE_VM", DriverMessages::STATE_VM},
+    {"UNDEFINED", DriverMessages::UNDEFINED}
 });
 
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int MonitorMessage::parse_from(const std::string& input)
-{
-    std::istringstream is(input);
-    std::string buffer, payloaz;
-
-    _type = Type::UNDEFINED;
-    _payload.clear();
-
-    if (!is.good())
-    {
-        return -1;
-    }
-
-    is >> buffer >> std::ws;
-
-    _type = type_str._from_str(buffer.c_str());
-
-    if ( !is.good() || _type == Type::UNDEFINED )
-    {
-        return -1;
-    }
-
-    buffer.clear();
-
-    is >> buffer >> std::ws;
-
-    base64_decode(buffer, payloaz);
-
-    if ( zlib_decompress(payloaz, _payload) == -1 )
-    {
-        _type = Type::UNDEFINED;
-        _payload.clear();
-
-        return -1;
-    }
-
-    return 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int MonitorMessage::write_to(std::string& out) const
-{
-    out.clear();
-
-    std::string payloaz;
-    std::string payloaz64;
-
-    if (zlib_compress(_payload, payloaz) == -1)
-    {
-        return -1;
-    }
-
-    if ( base64_encode(payloaz, payloaz64) == -1)
-    {
-        return -1;
-    }
-
-    out = type_str._to_str(_type);
-    out += ' ';
-    out += payloaz64;
-    out += '\n';
-
-    return 0;
-}
+template<>
+const EString<OnedMessages> Message<OnedMessages>::type_str({
+    {"ADD_HOST", OnedMessages::ADD_HOST},
+    {"DEL_HOST", OnedMessages::DEL_HOST},
+    {"UNDEFINED", OnedMessages::UNDEFINED}
+});
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -107,7 +42,7 @@ int MonitorMessage::write_to(std::string& out) const
 /* ************************************************************************** */
 /* ************************************************************************** */
 
-void MonitorMessage::base64_decode(const std::string& in, std::string& out)
+void base64_decode(const std::string& in, std::string& out)
 {
     BIO * bio_64  = BIO_new(BIO_f_base64());
 
@@ -141,7 +76,7 @@ void MonitorMessage::base64_decode(const std::string& in, std::string& out)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int MonitorMessage::base64_encode(const std::string& in, std::string &out)
+int base64_encode(const std::string& in, std::string &out)
 {
     BIO * bio_64  = BIO_new(BIO_f_base64());
     BIO * bio_mem = BIO_new(BIO_s_mem());
@@ -176,7 +111,7 @@ int MonitorMessage::base64_encode(const std::string& in, std::string &out)
  */
 #define ZBUFFER 16384
 
-int MonitorMessage::zlib_decompress(const std::string& in, std::string& out)
+int zlib_decompress(const std::string& in, std::string& out)
 {
     if ( in.empty() )
     {
@@ -235,7 +170,7 @@ int MonitorMessage::zlib_decompress(const std::string& in, std::string& out)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int MonitorMessage::zlib_compress(const std::string& in, std::string& out)
+int zlib_compress(const std::string& in, std::string& out)
 {
     if ( in.empty() )
     {
