@@ -18,13 +18,18 @@
 #define STREAM_MANAGER_H
 
 #include <map>
+#include <thread>
+#include <memory>
+
 #include "Message.h"
 
 template <typename E>
 class MessageAction
 {
 public:
-    virtual void operator()(const Message<E>& ms) const = 0;
+    virtual void operator()(std::unique_ptr<Message<E> > ms) const = 0;
+
+protected:
 };
 
 typedef MessageAction<DriverMessages> DriverAction;
@@ -32,7 +37,9 @@ typedef MessageAction<DriverMessages> DriverAction;
 typedef MessageAction<OnedMessages> OnedAction;
 
 /**
- *  This class manages a stream to process MonitorMessages.
+ *  This class manages a stream to process MonitorMessages. The StreamManager
+ *  thread reads from the stream for input messages and executed the associated
+ *  action in a separated (detached) thread.
  */
 template <typename E>
 class StreamManager
@@ -43,16 +50,24 @@ public:
         actions.insert(std::pair<E, MessageAction<E> *>(t, a));
     }
 
-    void do_action(const Message<E>& ms)
+    void do_action(std::unique_ptr<Message<E> >& msg)
     {
-        auto const it = actions.find(ms.type());
+        auto const it = actions.find(msg->type());
 
         if (it == actions.end())
         {
             return;
         }
 
-        (*it->second)(ms);
+        const auto action = it->second;
+        Message<E> * mptr = msg.release();
+
+        std::thread action_thread([=]{
+            std::unique_ptr<Message<E> > m(mptr);
+            (*action)(std::move(m));
+        });
+
+        action_thread.detach();
     }
 
 private:
