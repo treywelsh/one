@@ -24,9 +24,17 @@
 class BaseObject : public ObjectXML
 {
 public:
-    BaseObject()
+    explicit BaseObject(const std::string &xml_string)
+        : ObjectXML(xml_string)
     {
     }
+
+    explicit BaseObject(const xmlNodePtr node)
+        : ObjectXML(node)
+    {
+    }
+
+    virtual ~BaseObject() = default;
 
     int get_id() const
     {

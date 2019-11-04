@@ -33,20 +33,16 @@ class HostBase : public BaseObject, public ClusterableSingle
 {
 public:
     explicit HostBase(const std::string &xml_string)
-        : ClusterableSingle(-1, "")
+        : BaseObject(xml_string)
+        , ClusterableSingle(-1, "")
     {
-        // Initialize the internal XML object
-        update_from_str(xml_string);
-
         init_attributes();
     }
 
     explicit HostBase(const xmlNodePtr node)
-        : ClusterableSingle(-1, "")
+        : BaseObject(node)
+        , ClusterableSingle(-1, "")
     {
-        // Initialize the internal XML object
-        update_from_node(node);
-
         init_attributes();
     }
 
