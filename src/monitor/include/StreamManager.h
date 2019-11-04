@@ -17,9 +17,14 @@
 #ifndef STREAM_MANAGER_H
 #define STREAM_MANAGER_H
 
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <map>
 #include <thread>
 #include <memory>
+#include <string>
 
 #include "Message.h"
 
@@ -41,10 +46,24 @@ typedef MessageAction<OnedMessages> OnedAction;
  *  thread reads from the stream for input messages and executed the associated
  *  action in a separated (detached) thread.
  */
+#define STREAM_MANAGER_BUFFER_SIZE 512
+
 template <typename E>
 class StreamManager
 {
 public:
+    StreamManager(int _fd):fd(_fd)
+    {
+        buffer  = (char *) malloc(STREAM_MANAGER_BUFFER_SIZE * sizeof(char));
+    };
+
+    ~StreamManager()
+    {
+        free(buffer);
+
+        close(fd);
+    };
+
     void register_action(E t,  MessageAction<E> * a)
     {
         actions.insert(std::pair<E, MessageAction<E> *>(t, a));
@@ -52,7 +71,7 @@ public:
 
     void do_action(std::unique_ptr<Message<E> >& msg)
     {
-        auto const it = actions.find(msg->type());
+        const auto it = actions.find(msg->type());
 
         if (it == actions.end())
         {
@@ -71,7 +90,48 @@ public:
     }
 
 private:
+    int fd;
+
     std::map<E, MessageAction<E> *> actions;
+
+    char * buffer;
+
+    int read_line(std::string& line)
+    {
+        static size_t cur_sz  = STREAM_MANAGER_BUFFER_SIZE;
+
+        char * cur_ptr = buffer;
+        size_t line_sz = 0;
+
+        do
+        {
+            int rc = ::read(0, (void *) cur_ptr, cur_sz - line_sz - 1);
+
+            if ( rc <= 0 )
+            {
+                return -1;
+            }
+
+            cur_ptr[rc] = '\0';
+
+            line_sz += rc;
+
+            if ( strchr(cur_ptr, '\n') == 0)
+            {
+                cur_sz += STREAM_MANAGER_BUFFER_SIZE;
+
+                buffer  = (char *) realloc((void *) buffer, cur_sz);
+                cur_ptr = buffer + line_sz;
+
+                continue;
+            }
+
+            line.assign(buffer, line_sz + 1);
+
+            return 0;
+        }
+        while (true);
+    }
 };
 
 typedef StreamManager<DriverMessages> DriverStream;
