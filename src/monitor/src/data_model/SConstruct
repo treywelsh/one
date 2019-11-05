@@ -25,7 +25,8 @@ source_files=[
     'HostBase.cc',
     'VirtualMachineBase.cc',
     'RemotePool.cc',
-    'HostRemotePool.cc'
+    'HostRemotePool.cc',
+    'VMRemotePool.cc'
 ]
 
 # Build library

@@ -132,7 +132,7 @@ void Monitor::start()
     conf.get("MAX_VM", machines_limit);
 
     hpool  = new HostRemotePool();
-    // vmpool = new VirtualMachinePoolXML(client, machines_limit, false);
+    vmpool = new VMRemotePool();
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them
@@ -224,6 +224,15 @@ void Monitor::thread_execute()
         {
             NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
         }
+
+        vmpool->update();
+        auto vms = vmpool->get_objects();
+        NebulaLog::log("MON", Log::INFO, "Number of VMs = " + std::to_string(vms.size()));
+        for (auto o : vms)
+        {
+            NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
+        }
+
         sleep(5);
     }
 }

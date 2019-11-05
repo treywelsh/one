@@ -46,16 +46,22 @@ public:
 
     virtual ~VirtualMachineBase()
     {
-        // if (vm_template != 0)
-        // {
-        //     delete vm_template;
-        // }
-
-        // if (user_template != 0)
-        // {
-        //     delete user_template;
-        // }
+        delete vm_template;
+        delete user_template;
     }
+
+    /**
+     * Rebuilds the object from an xml formatted string
+     * @param xml_str The xml-formatted string
+     * @return 0 on success, -1 otherwise
+     */
+    int from_xml(const std::string &xml_str) override;
+
+    /**
+     * Print object to xml string
+     *  @return xml formatted string
+     */
+    std::string to_xml() const override;
 
     //--------------------------------------------------------------------------
     // Get Methods for VirtaulMachineBase class
@@ -73,23 +79,6 @@ public:
     bool is_public_cloud() const { return public_cloud; }
 
     bool is_active() const { return active; }
-
-    //--------------------------------------------------------------------------
-    // Scheduling requirements and rank
-    //--------------------------------------------------------------------------
-    const std::string& get_requirements() { return requirements; }
-
-    const std::string& get_ds_requirements() { return ds_requirements; }
-
-    const std::string& get_rank() { return rank; }
-
-    const std::string& get_ds_rank() { return ds_rank; }
-
-    /**
-     *  Adds (logical AND) new placement requirements to the current ones
-     *    @param reqs additional requirements
-     */
-    void add_requirements(const std::string& reqs);
 
     /**
      *  @return storage usage for the VM
@@ -111,7 +100,7 @@ protected:
     /**
      *  For constructors
      */
-    void init_attributes();
+    int init_attributes();
 
     void init_storage_usage();
 
@@ -130,20 +119,14 @@ protected:
 
     std::map<int,long long> ds_usage;
 
-    std::string rank;
-    std::string requirements;
-
-    std::string ds_requirements;
-    std::string ds_rank;
-
     time_t stime;
 
     std::set<int> nics_ids_auto;
 
     // std::map<int, VirtualMachineNicXML *> nics;
 
-    VirtualMachineTemplate * vm_template;   /**< The VM template */
-    VirtualMachineTemplate * user_template; /**< The VM user template */
+    VirtualMachineTemplate * vm_template = nullptr;
+    VirtualMachineTemplate * user_template = nullptr;
 };
 
 #endif // VIRTUAL_MACHINE_BASE_H_

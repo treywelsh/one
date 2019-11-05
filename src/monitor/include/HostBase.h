@@ -46,6 +46,19 @@ public:
         init_attributes();
     }
 
+    /**
+     * Rebuilds the object from an xml formatted string
+     * @param xml_str The xml-formatted string
+     * @return 0 on success, -1 otherwise
+     */
+    int from_xml(const std::string &xml_str) override;
+
+    /**
+     * Print object to xml string
+     *  @return xml formatted string
+     */
+    std::string to_xml() const override;
+
     int get_cid() const
     {
         return cluster_id;
@@ -89,26 +102,14 @@ public:
         return public_cloud;
     }
 
-    int init_attributes();
-
-    /**
-     * Rebuilds the object from an xml formatted string
-     * @param xml_str The xml-formatted string
-     * @return 0 on success, -1 otherwise
-     */
-    int from_xml(const std::string &xml_str) override;
-
-    /**
-     * Print object to xml string
-     *  @return xml formatted string
-     */
-    std::string to_xml() const override;
-
     /**
      *  Prints the Host information to an output stream. This function is used
      *  for logging purposes.
      */
     friend ostream& operator<<(ostream& o, const HostBase& host);
+
+protected:
+    int init_attributes();
 
 private:
     Host::HostState  state          = Host::HostState::INIT;

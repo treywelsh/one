@@ -19,13 +19,37 @@
 
 using namespace std;
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int VirtualMachineBase::from_xml(const std::string &xml_str)
+{
+    int rc = update_from_str(xml_str);
+
+    if (rc != 0)
+    {
+        return rc;
+    }
+
+    return init_attributes();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+string VirtualMachineBase::to_xml() const
+{
+    // todo
+    return "";
+}
+
 /******************************************************************************/
 /******************************************************************************/
 /*  INITIALIZE VM object attributes from its XML representation               */
 /******************************************************************************/
 /******************************************************************************/
 
-void VirtualMachineBase::init_attributes()
+int VirtualMachineBase::init_attributes()
 {
     std::vector<xmlNodePtr> nodes;
     std::vector<VectorAttribute*> attrs;
@@ -34,21 +58,21 @@ void VirtualMachineBase::init_attributes()
     int action;
     int tmp;
 
-    string automatic_requirements;
-    string automatic_ds_requirements;
-    string automatic_nic_requirements;
-
     /**************************************************************************/
     /* VM attributes and flags                                                */
     /**************************************************************************/
-    xpath(oid, "/VM/ID", -1);
-    xpath(uid, "/VM/UID", -1);
-    xpath(gid, "/VM/GID", -1);
+    rc = xpath(oid, "/VM/ID", -1);
+    rc += xpath(uid, "/VM/UID", -1);
+    rc += xpath(gid, "/VM/GID", -1);
 
-    xpath(tmp, "/VM/STATE", -1);
+    rc += xpath(name, "/VM/NAME", "not_found");
+    rc += xpath(uname, "/VM/UNAME", "not_found");
+    rc += xpath(gname, "/VM/GNAME", "not_found");
+
+    rc += xpath(tmp, "/VM/STATE", -1);
     active = tmp == 3;
 
-    xpath(tmp, "/VM/RESCHED", 0);
+    rc += xpath(tmp, "/VM/RESCHED", 0);
     resched = tmp == 1;
 
     xpath(action, "/VM/HISTORY_RECORDS/HISTORY/ACTION", -1);
@@ -58,7 +82,7 @@ void VirtualMachineBase::init_attributes()
     xpath(hid, "/VM/HISTORY_RECORDS/HISTORY/HID", -1);
     xpath(dsid, "/VM/HISTORY_RECORDS/HISTORY/DS_ID", -1);
 
-    xpath(stime, "/VM/STIME", (time_t) 0);
+    rc += xpath(stime, "/VM/STIME", (time_t) 0);
 
     /**************************************************************************/
     /*  VM Capacity memory, cpu and disk (system ds storage)                  */
@@ -66,73 +90,6 @@ void VirtualMachineBase::init_attributes()
     xpath<long int>(memory, "/VM/TEMPLATE/MEMORY", 0);
 
     xpath<float>(cpu, "/VM/TEMPLATE/CPU", 0);
-
-    /**************************************************************************/
-    /*  Scheduling rank expresions for:                                       */
-    /*    - host                                                              */
-    /*    - datastore                                                         */
-    /**************************************************************************/
-    rc = xpath(rank, "/VM/USER_TEMPLATE/SCHED_RANK", "");
-
-    if (rc != 0)
-    {
-        // Compatibility with previous versions
-        xpath(rank, "/VM/USER_TEMPLATE/RANK", "");
-    }
-
-    xpath(ds_rank, "/VM/USER_TEMPLATE/SCHED_DS_RANK", "");
-
-    /**************************************************************************/
-    /*  Scheduling requirements for:                                          */
-    /*    - host                                                              */
-    /*    - datastore                                                         */
-    /*    - network                                                           */
-    /**************************************************************************/
-    // ---------------------------------------------------------------------- //
-    // Host requirements                                                      //
-    // ---------------------------------------------------------------------- //
-    xpath(automatic_requirements, "/VM/TEMPLATE/AUTOMATIC_REQUIREMENTS", "");
-
-    rc = xpath(requirements, "/VM/USER_TEMPLATE/SCHED_REQUIREMENTS", "");
-
-    if (rc == 0)
-    {
-        if ( !automatic_requirements.empty() )
-        {
-            ostringstream oss;
-
-            oss << automatic_requirements << " & ( " << requirements << " )";
-
-            requirements = oss.str();
-        }
-    }
-    else if ( !automatic_requirements.empty() )
-    {
-        requirements = automatic_requirements;
-    }
-
-    // ---------------------------------------------------------------------- //
-    // Datastore requirements                                                 //
-    // ---------------------------------------------------------------------- //
-    xpath(automatic_ds_requirements, "/VM/TEMPLATE/AUTOMATIC_DS_REQUIREMENTS", "");
-
-    rc = xpath(ds_requirements, "/VM/USER_TEMPLATE/SCHED_DS_REQUIREMENTS", "");
-
-    if (rc == 0)
-    {
-        if ( !automatic_ds_requirements.empty() )
-        {
-            ostringstream oss;
-
-            oss << automatic_ds_requirements << " & ( " << ds_requirements << " )";
-
-            ds_requirements = oss.str();
-        }
-    }
-    else if ( !automatic_ds_requirements.empty() )
-    {
-        ds_requirements = automatic_ds_requirements;
-    }
 
     /**************************************************************************/
     /*  Template, user template, history information and rescheduling flag    */
@@ -181,6 +138,8 @@ void VirtualMachineBase::init_attributes()
     {
         system_ds_usage = 0;
     }
+
+    return 0;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -276,28 +235,6 @@ void VirtualMachineBase::init_storage_usage()
     for (int i = 0; i < num ; i++)
     {
         delete disks[i];
-    }
-}
-
-/******************************************************************************/
-/******************************************************************************/
-/*  VM requirements and capacity interface                                    */
-/******************************************************************************/
-/******************************************************************************/
-
-void VirtualMachineBase::add_requirements(const string& reqs)
-{
-    if ( reqs.empty() )
-    {
-        return;
-    }
-    else if ( requirements.empty() )
-    {
-        requirements = reqs;
-    }
-    else
-    {
-        requirements += " & (" + reqs + ")";
     }
 }
 

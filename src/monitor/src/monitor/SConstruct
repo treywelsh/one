@@ -38,7 +38,7 @@ mon_env.Prepend(LIBS=[
     # 'nebula_acl',
     # 'nebula_rm',
     # 'nebula_um',
-    # 'nebula_vm',
+    'nebula_vm',
     'nebula_pool',
     'nebula_log',
     'nebula_common',
