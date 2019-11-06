@@ -25,6 +25,7 @@
 #include <thread>
 #include <memory>
 #include <string>
+#include <functional>
 
 #include "Message.h"
 
@@ -64,9 +65,10 @@ public:
         close(fd);
     };
 
-    void register_action(E t,  MessageAction<E> * a)
+    using msg_callback_t = std::function<void(std::unique_ptr<Message<E>>)>;
+    void register_action(E t, msg_callback_t a)
     {
-        actions.insert(std::pair<E, MessageAction<E> *>(t, a));
+        actions.insert({t, a});
     }
 
     void do_action(std::unique_ptr<Message<E> >& msg)
@@ -82,8 +84,7 @@ public:
         Message<E> * mptr = msg.release();
 
         std::thread action_thread([=]{
-            std::unique_ptr<Message<E> > m(mptr);
-            (*action)(std::move(m));
+            action(std::unique_ptr<Message<E>>{mptr});
         });
 
         action_thread.detach();
@@ -92,7 +93,7 @@ public:
 private:
     int fd;
 
-    std::map<E, MessageAction<E> *> actions;
+    std::map<E, msg_callback_t> actions;
 
     char * buffer;
 
