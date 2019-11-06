@@ -105,7 +105,7 @@ private:
 
         do
         {
-            int rc = ::read(0, (void *) cur_ptr, cur_sz - line_sz - 1);
+            int rc = ::read(fd, (void *) cur_ptr, cur_sz - line_sz - 1);
 
             if ( rc <= 0 )
             {

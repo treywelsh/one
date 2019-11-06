@@ -92,9 +92,9 @@ void Monitor::start()
 
 
     ostringstream oss;
-    oss << "Starting Scheduler Daemon" << endl;
+    oss << "Starting Monitor Daemon" << endl;
     oss << "----------------------------------------\n";
-    oss << "     Scheduler Configuration File       \n";
+    oss << "       Monitor Configuration File       \n";
     oss << "----------------------------------------\n";
     oss << conf;
     oss << "----------------------------------------";
@@ -128,8 +128,8 @@ void Monitor::start()
     // -------------------------------------------------------------------------
     // Pools
     // -------------------------------------------------------------------------
-    int machines_limit = 100;
-    conf.get("MAX_VM", machines_limit);
+    // int machines_limit = 100;
+    // conf.get("MAX_VM", machines_limit);
 
     hpool  = new HostRemotePool();
     vmpool = new VMRemotePool();
