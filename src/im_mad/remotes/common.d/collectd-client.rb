@@ -65,6 +65,7 @@ class CollectdClient
         address
     end
 
+    # TODO: Run probe per probe_directory
     def run_probes
         data   = `#{@run_probes_cmd} 2>&1`
         code   = $CHILD_STATUS.exitstatus == 0
@@ -117,6 +118,7 @@ port                = ARGV[2]
 monitor_push_period = ARGV[3].to_i
 number              = ARGV[4]
 
+# TODO: Hard coded default
 monitor_push_period = 20 if monitor_push_period == 0
 
 host = ENV['SSH_CLIENT'].split.first
@@ -134,7 +136,9 @@ Signal.trap('HUP') do
     this_handler = Signal.trap('HUP', 'IGNORE')
 
     data = client.run_probes
-    client.send data
+
+    # TODO: Save data to DB
+    client.send data # TODO: Compare with DB before send
 
     # set the handler back
     Signal.trap('HUP', this_handler)
