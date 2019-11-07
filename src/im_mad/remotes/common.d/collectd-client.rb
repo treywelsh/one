@@ -111,10 +111,8 @@ class CollectdClient
 
 end
 
-# Arguments: hypervisor(0) ds_location(1) collectd_port(2) monitor_push_period(3)
-#                         host_id(4) hostname(5)
-
 hypervisor          = ARGV[0]
+# ds_location         = ARGV[1]
 port                = ARGV[2]
 monitor_push_period = ARGV[3].to_i
 number              = ARGV[4]
