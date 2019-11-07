@@ -22,11 +22,11 @@ require 'resolv'
 require 'ipaddr'
 require 'zlib'
 
-
 DIRNAME = File.dirname(__FILE__)
 REMOTE_DIR_UPDATE = File.join(DIRNAME, '../../.update')
 
 class CollectdClient
+
     def initialize(hypervisor, number, host, port, probes_args,
                    monitor_push_period)
         # Arguments
@@ -37,7 +37,7 @@ class CollectdClient
         @monitor_push_period = monitor_push_period
 
         # Probes
-        run_probes_cmd = File.join(DIRNAME, '..', "run_probes")
+        run_probes_cmd = File.join(DIRNAME, '..', 'run_probes')
         @run_probes_cmd = "#{run_probes_cmd} #{@hypervisor}-probes #{probes_args}"
 
         # Get last update
@@ -48,14 +48,14 @@ class CollectdClient
     end
 
     def get_ipv4_address(host)
-        addresses=Resolv.getaddresses(host)
-        address=nil
+        addresses = Resolv.getaddresses(host)
+        address = nil
 
         addresses.each do |addr|
             begin
-                a=IPAddr.new(addr)
+                a = IPAddr.new(addr)
                 if a.ipv4?
-                    address=addr
+                    address = addr
                     break
                 end
             rescue
@@ -67,17 +67,17 @@ class CollectdClient
 
     def run_probes
         data   = `#{@run_probes_cmd} 2>&1`
-        code   = $?.exitstatus == 0
+        code   = $CHILD_STATUS.exitstatus == 0
 
         zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
-        data64 = Base64::encode64(zdata).strip.delete("\n")
+        data64 = Base64.encode64(zdata).strip.delete("\n")
 
         [data64, code]
     end
 
     def send(data)
         message, code = data
-        result = code ? "SUCCESS" : "FAILURE"
+        code ? result = 'SUCCESS' : result = 'FAILURE'
         @s.send("MONITOR #{result} #{@number} #{message}\n", 0, @host, @port)
     end
 
@@ -90,7 +90,7 @@ class CollectdClient
             ts = Time.now
 
             # Send signal to itself to run probes and send the data
-            Process.kill('HUP', $$)
+            Process.kill('HUP', $PROCESS_ID)
 
             run_probes_time = (Time.now - ts).to_i
 
@@ -108,9 +108,10 @@ class CollectdClient
     def stop?
         get_last_update.to_i != @last_update.to_i
     end
+
 end
 
-#Arguments: hypervisor(0) ds_location(1) collectd_port(2) monitor_push_period(3)
+# Arguments: hypervisor(0) ds_location(1) collectd_port(2) monitor_push_period(3)
 #                         host_id(4) hostname(5)
 
 hypervisor          = ARGV[0]
@@ -120,8 +121,8 @@ number              = ARGV[4]
 
 monitor_push_period = 20 if monitor_push_period == 0
 
-host       = ENV['SSH_CLIENT'].split.first
-probes_args= ARGV[1..-1].join(" ")
+host = ENV['SSH_CLIENT'].split.first
+probes_args = ARGV[1..-1].join(' ')
 
 # Add a random sleep before the first send
 sleep rand monitor_push_period
