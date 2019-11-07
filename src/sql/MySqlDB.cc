@@ -370,6 +370,11 @@ bool MySqlDB::fts_available()
 
     version = mysql_get_server_version(db_escape_connect);
 
+    std::ostringstream oss;
+    oss << "MySQL server version: "
+        << std::to_string(version);
+    NebulaLog::log("SQL", Log::WARNING, oss);
+
     if (version >= 50600)
     {
         return true;
