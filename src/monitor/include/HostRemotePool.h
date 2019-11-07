@@ -36,8 +36,8 @@ public:
 
     void add_object(const std::string& xml_string)
     {
-        auto host = new HostBase(xml_string);
-        RemotePool::add_object(host);
+        // todo Handle error state, when the object can't be constructed from xml
+        RemotePool::add_object(std::unique_ptr<HostBase>(new HostBase(xml_string)));
     }
 
 protected:

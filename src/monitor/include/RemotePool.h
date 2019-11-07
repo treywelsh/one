@@ -21,13 +21,15 @@
 #include "Client.h"
 #include "BaseObject.h"
 
+#include <memory>
+
 class RemotePool
 {
 public:
     /**
      * Returns list of objects
      */
-    const map<int, BaseObject*>& get_objects() const
+    const map<int, std::unique_ptr<BaseObject>>& get_objects() const
     {
         return objects;
     };
@@ -49,7 +51,7 @@ public:
         }
         else
         {
-            return static_cast<T*>(it->second);
+            return static_cast<T*>(it->second.get());
         }
     };
 
@@ -63,24 +65,13 @@ public:
 
         if (it != objects.end())
         {
-            delete it->second;
             objects.erase(it);
         }
     };
 
-    void add_object(BaseObject* o)
+    void add_object(std::unique_ptr<BaseObject> o)
     {
-        auto it = objects.find(o->get_id());
-
-        if (it != objects.end())
-        {
-            delete it->second;
-            it->second = o;
-        }
-        else
-        {
-            objects.insert({o->get_id(), o});
-        }
+        objects[o->get_id()] = std::move(o);
     }
 
     /**
@@ -96,21 +87,13 @@ protected:
     {
     }
 
-    virtual ~RemotePool()
-    {
-        clear();
-    };
+    virtual ~RemotePool() = default;
 
     /**
      *  Deletes pool objects and frees resources.
      */
     void clear()
     {
-        for (auto o : objects)
-        {
-            delete o.second;
-        }
-
         objects.clear();
     }
 
@@ -145,9 +128,9 @@ protected:
             return;
         }
 
-        auto obj = new T(node);
+        auto obj = std::unique_ptr<T>(new T(node));
 
-        objects.insert({obj->get_id(), obj});
+        objects[obj->get_id()] = std::move(obj);
     }
 
     // ------------------------------------------------------------------------
@@ -161,7 +144,7 @@ protected:
     /**
      * Hash map contains the suitable [id, object] pairs.
      */
-    map<int, BaseObject*> objects;
+    map<int, std::unique_ptr<BaseObject>> objects;
 };
 
 #endif // REMOTE_POOL_H_

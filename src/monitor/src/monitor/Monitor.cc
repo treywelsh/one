@@ -229,9 +229,9 @@ void Monitor::thread_execute()
 
     while (!terminate)
     {
-        auto hosts = hpool->get_objects();
+        const auto& hosts = hpool->get_objects();
         NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
-        for (auto o : hosts)
+        for (const auto& o : hosts)
         {
             NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
         }
