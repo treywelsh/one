@@ -26,8 +26,10 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <sys/ioctl.h>
 
 #include "Message.h"
+#include "NebulaLog.h"
 
 template <typename E>
 class MessageAction
@@ -68,7 +70,11 @@ public:
     using msg_callback_t = std::function<void(std::unique_ptr<Message<E>>)>;
     void register_action(E t, msg_callback_t a)
     {
-        actions.insert({t, a});
+        auto ret = actions.insert({t, a});
+        if (!ret.second)
+        {
+            NebulaLog::log("SM", Log::WARNING, "Action handler already registered");
+        }
     }
 
     void do_action(std::unique_ptr<Message<E> >& msg)
@@ -90,12 +96,41 @@ public:
         action_thread.detach();
     }
 
+    void run()
+    {
+        while (!terminate)
+        {
+            std::string line;
+            if (read_line(line) == 0)
+            {
+                std::unique_ptr<Message<E>> msg{new Message<E>};
+                if (msg->parse_from(line) == 0)
+                {
+                    do_action(msg);
+                }
+                else
+                {
+                    NebulaLog::log("SM", Log::WARNING, "Unable to parse received message: " + line);
+                }
+
+            }
+        }
+    }
+
+    void stop()
+    {
+        terminate = true;
+        ioctl(0, TIOCSTI, "\n"); // Unblock ::read
+    }
+
 private:
     int fd;
 
     std::map<E, msg_callback_t> actions;
 
     char * buffer;
+
+    bool terminate{false};
 
     int read_line(std::string& line)
     {

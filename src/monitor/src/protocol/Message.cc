@@ -21,7 +21,7 @@
 #include "Message.h"
 
 template<>
-const EString<DriverMessages> Message<DriverMessages>::type_str({
+const EString<DriverMessages> Message<DriverMessages>::_type_str({
     {"MONITOR_VM", DriverMessages::MONITOR_VM},
     {"MONITOR_HOST", DriverMessages::MONITOR_HOST},
     {"SYSTEM_HOST", DriverMessages::SYSTEM_HOST},
@@ -30,7 +30,7 @@ const EString<DriverMessages> Message<DriverMessages>::type_str({
 });
 
 template<>
-const EString<OnedMessages> Message<OnedMessages>::type_str({
+const EString<OnedMessages> Message<OnedMessages>::_type_str({
     {"ADD_HOST", OnedMessages::ADD_HOST},
     {"DEL_HOST", OnedMessages::DEL_HOST},
     {"UNDEFINED", OnedMessages::UNDEFINED}

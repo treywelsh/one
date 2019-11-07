@@ -34,6 +34,12 @@ public:
         return RemotePool::get<HostBase>(oid);
     }
 
+    void add_object(const std::string& xml_string)
+    {
+        auto host = new HostBase(xml_string);
+        RemotePool::add_object(host);
+    }
+
 protected:
     int load_info(xmlrpc_c::value &result) override;
 
@@ -49,6 +55,7 @@ protected:
     {
         RemotePool::add_object<HostBase>(node);
     }
+
 private:
 };
 

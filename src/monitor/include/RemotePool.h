@@ -54,6 +54,36 @@ public:
     };
 
     /**
+     *  Removes object from the pool
+     *   @param oid the object unique identifier
+     */
+    void erase(int oid)
+    {
+        auto it = objects.find(oid);
+
+        if (it != objects.end())
+        {
+            delete it->second;
+            objects.erase(it);
+        }
+    };
+
+    void add_object(BaseObject* o)
+    {
+        auto it = objects.find(o->get_id());
+
+        if (it != objects.end())
+        {
+            delete it->second;
+            it->second = o;
+        }
+        else
+        {
+            objects.insert({o->get_id(), o});
+        }
+    }
+
+    /**
      *  Read data from server, fill internal structures
      *   @return 0 on success
      */
@@ -117,7 +147,7 @@ protected:
 
         auto obj = new T(node);
 
-        objects.insert(pair<int, BaseObject*>(obj->get_id(), obj));
+        objects.insert({obj->get_id(), obj});
     }
 
     // ------------------------------------------------------------------------

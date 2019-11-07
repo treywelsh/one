@@ -21,6 +21,7 @@
 
 #include "HostRemotePool.h"
 #include "VMRemotePool.h"
+#include "Message.h"
 
 class Monitor
 {
@@ -28,14 +29,19 @@ public:
     void start();
 
     void thread_execute();
+
+protected:
+    void process_add_host(std::unique_ptr<OnedMessage> msg);
+    void process_del_host(std::unique_ptr<OnedMessage> msg);
+
 private:
-    std::thread*       monitor_thread = nullptr;
+    std::unique_ptr<std::thread>       monitor_thread;
 
     // ---------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------
-    HostRemotePool *               hpool = nullptr;
-    VMRemotePool *                 vmpool = nullptr;
+    std::unique_ptr<HostRemotePool>    hpool;
+    std::unique_ptr<VMRemotePool>      vmpool;
 
     bool terminate = false;
 };

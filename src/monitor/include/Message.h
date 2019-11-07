@@ -92,7 +92,7 @@ public:
 
         is >> buffer >> std::ws;
 
-        _type = type_str._from_str(buffer.c_str());
+        _type = _type_str._from_str(buffer.c_str());
 
         if ( !is.good() || _type == E::UNDEFINED )
         {
@@ -136,7 +136,7 @@ public:
             return -1;
         }
 
-        out = type_str._to_str(_type);
+        out = _type_str._to_str(_type);
         out += ' ';
         out += payloaz64;
         out += '\n';
@@ -191,6 +191,10 @@ public:
         _type = t;
     }
 
+    const std::string& type_str() const
+    {
+        return _type_str._to_str(_type);
+    }
     /**
      *
      */
@@ -212,7 +216,7 @@ private:
 
     std::string _payload;
 
-    static const EString<E> type_str;
+    static const EString<E> _type_str;
 };
 
 /**

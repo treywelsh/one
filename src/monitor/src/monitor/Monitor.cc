@@ -18,6 +18,7 @@
 #include "MonitorTemplate.h"
 #include "NebulaLog.h"
 #include "Client.h"
+#include "StreamManager.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -131,8 +132,8 @@ void Monitor::start()
     // int machines_limit = 100;
     // conf.get("MAX_VM", machines_limit);
 
-    hpool  = new HostRemotePool();
-    vmpool = new VMRemotePool();
+    hpool.reset(new HostRemotePool());
+    vmpool.reset(new VMRemotePool());
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them
@@ -174,7 +175,7 @@ void Monitor::start()
 
     NebulaLog::log("MON", Log::INFO, "Starting monitor loop...");
 
-    monitor_thread = new std::thread(&Monitor::thread_execute, this);
+    monitor_thread.reset(new std::thread(&Monitor::thread_execute, this));
     // pthread_attr_t pattr;
     // pthread_attr_init(&pattr);
     // pthread_attr_setdetachstate(&pattr, PTHREAD_CREATE_JOINABLE);
@@ -215,9 +216,19 @@ void Monitor::start()
 
 void Monitor::thread_execute()
 {
+    // Do initial pull from oned, then read only changes
+    hpool->update();
+
+    // Maybe it's not necessery to have two threads (Monitor::thread_execute
+    // and OnedStream::run), we will see later
+    OnedStream oned_reader(0);
+    using namespace std::placeholders; // for _1
+    oned_reader.register_action(OnedMessages::ADD_HOST, std::bind(&Monitor::process_add_host, this, _1));
+    oned_reader.register_action(OnedMessages::DEL_HOST, std::bind(&Monitor::process_del_host, this, _1));
+    auto oned_msg_thread = std::thread(&OnedStream::run, &oned_reader);
+
     while (!terminate)
     {
-        hpool->update();
         auto hosts = hpool->get_objects();
         NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
         for (auto o : hosts)
@@ -225,14 +236,39 @@ void Monitor::thread_execute()
             NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
         }
 
-        vmpool->update();
-        auto vms = vmpool->get_objects();
-        NebulaLog::log("MON", Log::INFO, "Number of VMs = " + std::to_string(vms.size()));
-        for (auto o : vms)
-        {
-            NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
-        }
+        // vmpool->update();
+        // auto vms = vmpool->get_objects();
+        // NebulaLog::log("MON", Log::INFO, "Number of VMs = " + std::to_string(vms.size()));
+        // for (auto o : vms)
+        // {
+        //     NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
+        // }
 
         sleep(5);
     }
+
+    oned_reader.stop();
+    oned_msg_thread.join();
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_add_host(std::unique_ptr<OnedMessage> msg)
+{
+    // todo Thread safety, lock here or inside pools?
+    hpool->add_object(msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_del_host(std::unique_ptr<OnedMessage> msg)
+{
+    HostBase host(msg->payload());
+
+    hpool->erase(host.get_id());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
