@@ -19,21 +19,23 @@
 #include <zlib.h>
 
 #include "Message.h"
+#include "MonitorDriver.h"
+#include "OpenNebulaStream.h"
 
 template<>
-const EString<DriverMessages> Message<DriverMessages>::_type_str({
-    {"MONITOR_VM", DriverMessages::MONITOR_VM},
-    {"MONITOR_HOST", DriverMessages::MONITOR_HOST},
-    {"SYSTEM_HOST", DriverMessages::SYSTEM_HOST},
-    {"STATE_VM", DriverMessages::STATE_VM},
-    {"UNDEFINED", DriverMessages::UNDEFINED}
+const EString<MonitorDriverMessages> Message<MonitorDriverMessages>::_type_str({
+    {"MONITOR_VM", MonitorDriverMessages::MONITOR_VM},
+    {"MONITOR_HOST", MonitorDriverMessages::MONITOR_HOST},
+    {"SYSTEM_HOST", MonitorDriverMessages::SYSTEM_HOST},
+    {"STATE_VM", MonitorDriverMessages::STATE_VM},
+    {"UNDEFINED", MonitorDriverMessages::UNDEFINED}
 });
 
 template<>
-const EString<OnedMessages> Message<OnedMessages>::_type_str({
-    {"ADD_HOST", OnedMessages::ADD_HOST},
-    {"DEL_HOST", OnedMessages::DEL_HOST},
-    {"UNDEFINED", OnedMessages::UNDEFINED}
+const EString<OpenNebulaMessages> Message<OpenNebulaMessages>::_type_str({
+    {"ADD_HOST", OpenNebulaMessages::ADD_HOST},
+    {"DEL_HOST", OpenNebulaMessages::DEL_HOST},
+    {"UNDEFINED", OpenNebulaMessages::UNDEFINED}
 });
 
 /* ************************************************************************** */

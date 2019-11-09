@@ -26,152 +26,227 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <atomic>
 #include <sys/ioctl.h>
 
 #include "Message.h"
-#include "NebulaLog.h"
 
-template <typename E>
-class MessageAction
-{
-public:
-    virtual void operator()(std::unique_ptr<Message<E> > ms) const = 0;
-
-protected:
-};
-
-typedef MessageAction<DriverMessages> DriverAction;
-
-typedef MessageAction<OnedMessages> OnedAction;
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+#define STREAM_MANAGER_BUFFER_SIZE 512
 
 /**
- *  This class manages a stream to process MonitorMessages. The StreamManager
+ *  This class manages a stream to process Messages. The StreamManager
  *  thread reads from the stream for input messages and executed the associated
  *  action in a separated (detached) thread.
  */
-#define STREAM_MANAGER_BUFFER_SIZE 512
-
 template <typename E>
 class StreamManager
 {
 public:
-    StreamManager(int _fd):fd(_fd)
+    using callback_t = std::function<void(std::unique_ptr<Message<E>>)>;
+
+    /* ---------------------------------------------------------------------- */
+    /* ---------------------------------------------------------------------- */
+    /**
+     *  @param fd file descriptor for the stream
+     *  @param error_cbk function to execute on error (parse error or UNDEFINED)
+     */
+    StreamManager(int __fd, callback_t error_cbk):_fd(__fd)
     {
-        buffer  = (char *) malloc(STREAM_MANAGER_BUFFER_SIZE * sizeof(char));
+        buffer = (char *) malloc(STREAM_MANAGER_BUFFER_SIZE * sizeof(char));
+
+        register_action(E::UNDEFINED, error_cbk);
     };
+
+    StreamManager(callback_t error_cbk):StreamManager(-1, error_cbk){};
+
+    StreamManager():StreamManager(-1, [](std::unique_ptr<Message<E> > m){}){};
 
     ~StreamManager()
     {
         free(buffer);
 
-        close(fd);
+        close(_fd);
     };
 
-    using msg_callback_t = std::function<void(std::unique_ptr<Message<E>>)>;
-    void register_action(E t, msg_callback_t a)
+    /**
+     * Associate a function to be executed when a message of the given type is
+     * read
+     *   @param t the message type
+     *   @param a callback function to be executed
+     */
+    void register_action(E t, callback_t a);
+
+    /**
+     *  Reads messages from the stream and execute callbacks. This method should
+     *  be run in a separated thread.
+     */
+    int action_loop();
+
+    /**
+     *  Sets the file descriptor for the stream
+     *    @param fd file descriptor
+     */
+    void fd(int __fd)
     {
-        auto ret = actions.insert({t, a});
-        if (!ret.second)
-        {
-            NebulaLog::log("SM", Log::WARNING, "Action handler already registered");
-        }
-    }
-
-    void do_action(std::unique_ptr<Message<E> >& msg)
-    {
-        const auto it = actions.find(msg->type());
-
-        if (it == actions.end())
-        {
-            return;
-        }
-
-        const auto action = it->second;
-        Message<E> * mptr = msg.release();
-
-        std::thread action_thread([=]{
-            action(std::unique_ptr<Message<E>>{mptr});
-        });
-
-        action_thread.detach();
-    }
-
-    void run()
-    {
-        while (!terminate)
-        {
-            std::string line;
-            if (read_line(line) == 0)
-            {
-                std::unique_ptr<Message<E>> msg{new Message<E>};
-                if (msg->parse_from(line) == 0)
-                {
-                    do_action(msg);
-                }
-                else
-                {
-                    NebulaLog::log("SM", Log::WARNING, "Unable to parse received message: " + line);
-                }
-
-            }
-        }
-    }
-
-    void stop()
-    {
-        terminate = true;
-        ioctl(0, TIOCSTI, "\n"); // Unblock ::read
+        _fd = __fd;
     }
 
 private:
-    int fd;
+    int _fd;
 
-    std::map<E, msg_callback_t> actions;
+    std::map<E, callback_t > actions;
 
     char * buffer;
 
-    bool terminate{false};
+    /**
+     *  Look for the associated callback for the message and execute it
+     *    @param msg read from the stream
+     */
+    void do_action(std::unique_ptr<Message<E> >& msg);
 
-    int read_line(std::string& line)
-    {
-        static size_t cur_sz  = STREAM_MANAGER_BUFFER_SIZE;
-
-        char * cur_ptr = buffer;
-        size_t line_sz = 0;
-
-        do
-        {
-            int rc = ::read(fd, (void *) cur_ptr, cur_sz - line_sz - 1);
-
-            if ( rc <= 0 )
-            {
-                return -1;
-            }
-
-            cur_ptr[rc] = '\0';
-
-            line_sz += rc;
-
-            if ( strchr(cur_ptr, '\n') == 0)
-            {
-                cur_sz += STREAM_MANAGER_BUFFER_SIZE;
-
-                buffer  = (char *) realloc((void *) buffer, cur_sz);
-                cur_ptr = buffer + line_sz;
-
-                continue;
-            }
-
-            line.assign(buffer, line_sz + 1);
-
-            return 0;
-        }
-        while (true);
-    }
+    /**
+     *  Read a line from the stream
+     *    @return -1 in case of error or EOL
+     */
+    int read_line(std::string& line);
 };
 
-typedef StreamManager<DriverMessages> DriverStream;
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Stream Manager Implementation                                              */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
-typedef StreamManager<OnedMessages> OnedStream;
+template<typename E>
+void StreamManager<E>::register_action(E t, callback_t a)
+{
+    auto ret = actions.insert({t, a});
+
+    if (!ret.second)
+    {
+        ret.first->second = a;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg)
+{
+    const auto it = actions.find(msg->type());
+
+    if (it == actions.end())
+    {
+        return;
+    }
+
+    const auto action = it->second;
+    Message<E> * mptr = msg.release();
+
+    std::thread action_thread([=]{
+        action(std::unique_ptr<Message<E>>{mptr});
+    });
+
+    action_thread.detach();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+int StreamManager<E>::action_loop()
+{
+    while (true)
+    {
+        std::string line;
+
+        if (read_line(line) != 0)
+        {
+            return -1;
+        }
+
+        std::unique_ptr<Message<E>> msg{new Message<E>};
+
+        msg->parse_from(line);
+
+        do_action(msg); //Errors are handled by the UNDEFINED action
+    }
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+int StreamManager<E>::read_line(std::string& line)
+{
+    static size_t cur_sz  = STREAM_MANAGER_BUFFER_SIZE;
+    static size_t line_sz = 0;
+
+    static char * buffer_seek = buffer;
+
+    /* Look for pending lines in the buffer */
+    const char * eom = strchr(buffer_seek, '\n');
+
+    if ( eom != 0 )
+    {
+        line.assign(buffer_seek, (eom - buffer_seek) + 1);
+
+        line_sz -= (eom - buffer_seek) + 1;
+
+        buffer_seek = (char *) eom + 1;
+
+        return 0;
+    }
+
+    /* Rotate buffer */
+
+    for ( size_t i = 0 ; i < line_sz; i++)
+    {
+        buffer[i] = buffer_seek[i];
+    }
+
+    char * cur_ptr = buffer + line_sz;
+
+    /* Read from stream */
+    do
+    {
+        int rc = ::read(_fd, (void *) cur_ptr, cur_sz - line_sz - 1);
+
+        if ( rc <= 0 )
+        {
+            return -1;
+        }
+
+        cur_ptr[rc] = '\0';
+
+        line_sz += rc;
+
+        const char * eom = strchr(cur_ptr, '\n');
+
+        if ( eom == 0)
+        {
+            cur_sz += STREAM_MANAGER_BUFFER_SIZE;
+
+            buffer  = (char *) realloc((void *) buffer, cur_sz);
+            cur_ptr = buffer + line_sz;
+
+            continue;
+        }
+
+        line.assign(buffer, (eom - buffer) + 1);
+
+        buffer_seek = (char *) eom + 1;
+
+        line_sz -= (eom - buffer) + 1;
+
+        return 0;
+    }
+    while (true);
+}
 
 #endif /*STREAM_MANAGER_H*/
