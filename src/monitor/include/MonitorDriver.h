@@ -18,6 +18,7 @@
 #define MONITOR_DRIVER_H_
 
 #include "Driver.h"
+#include "UDPStream.h"
 
 /**
  * Messages between the Monitor daemon and drivers
@@ -31,6 +32,8 @@ enum class MonitorDriverMessages : unsigned short int
     UNDEFINED    = 4
 };
 
-typedef Driver<MonitorDriverMessages> monitor_driver_t;
+typedef Driver<MonitorDriverMessages> driver_t;
+
+typedef UDPStream<MonitorDriverMessages> udp_streamer_t;
 
 #endif /*MONIOTR_DRIVER_H_*/

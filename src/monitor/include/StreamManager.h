@@ -82,7 +82,7 @@ public:
      *  Reads messages from the stream and execute callbacks. This method should
      *  be run in a separated thread.
      */
-    int action_loop();
+    virtual int action_loop(bool threaded);
 
     /**
      *  Sets the file descriptor for the stream
@@ -93,24 +93,25 @@ public:
         _fd = __fd;
     }
 
+protected:
+    /**
+     *  Read a line from the stream
+     *    @return -1 in case of error or EOL
+     */
+    virtual int read_line(std::string& line);
+
+    /**
+     *  Look for the associated callback for the message and execute it
+     *    @param msg read from the stream
+     */
+    void do_action(std::unique_ptr<Message<E> >& msg, bool threaded);
+
 private:
     int _fd;
 
     std::map<E, callback_t > actions;
 
     char * buffer;
-
-    /**
-     *  Look for the associated callback for the message and execute it
-     *    @param msg read from the stream
-     */
-    void do_action(std::unique_ptr<Message<E> >& msg);
-
-    /**
-     *  Read a line from the stream
-     *    @return -1 in case of error or EOL
-     */
-    int read_line(std::string& line);
 };
 
 /* -------------------------------------------------------------------------- */
@@ -134,7 +135,7 @@ void StreamManager<E>::register_action(E t, callback_t a)
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg)
+void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg, bool thr)
 {
     const auto it = actions.find(msg->type());
 
@@ -146,18 +147,25 @@ void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg)
     const auto action = it->second;
     Message<E> * mptr = msg.release();
 
-    std::thread action_thread([=]{
-        action(std::unique_ptr<Message<E>>{mptr});
-    });
+    if (thr)
+    {
+        std::thread action_thread([=]{
+            action(std::unique_ptr<Message<E>>{mptr});
+        });
 
-    action_thread.detach();
+        action_thread.detach();
+    }
+    else
+    {
+        action(std::unique_ptr<Message<E>>{mptr});
+    }
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int StreamManager<E>::action_loop()
+int StreamManager<E>::action_loop(bool threaded)
 {
     while (true)
     {
@@ -168,11 +176,16 @@ int StreamManager<E>::action_loop()
             return -1;
         }
 
+        if (line.empty())
+        {
+            continue;
+        }
+
         std::unique_ptr<Message<E>> msg{new Message<E>};
 
         msg->parse_from(line);
 
-        do_action(msg); //Errors are handled by the UNDEFINED action
+        do_action(msg, threaded); //Errors are handled by the UNDEFINED action
     }
 
     return 0;

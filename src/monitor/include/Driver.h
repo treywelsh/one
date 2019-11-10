@@ -47,14 +47,14 @@ public:
      *    @param error string
      *    @return 0 on success
      */
-    int start(std::string& error)
+    int start(bool threaded, std::string& error)
     {
         if ( start_driver(error) == -1 )
         {
             return -1;
         }
 
-        start_listener();
+        start_listener(threaded);
 
         return 0;
     }
@@ -142,7 +142,7 @@ private:
      *  Starts the listener thread. The thread will reload the driver process if
      *  it fails (EOF on pipe)
      */
-    void start_listener();
+    void start_listener(bool threaded);
 };
 
 /* -------------------------------------------------------------------------- */
@@ -289,12 +289,12 @@ int Driver<E>::start_driver(std::string& error)
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-void Driver<E>::start_listener()
+void Driver<E>::start_listener(bool threaded)
 {
     streamer.fd(from_drv);
 
-    stream_thr = std::thread([this](){
-        while(streamer.action_loop() == -1 && !terminate.load())
+    stream_thr = std::thread([this, threaded](){
+        while(streamer.action_loop(threaded) == -1 && !terminate.load())
         {
             std::string error;
 
