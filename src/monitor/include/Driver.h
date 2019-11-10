@@ -143,11 +143,6 @@ private:
      *  it fails (EOF on pipe)
      */
     void start_listener();
-
-    /**
-     *  Stop the listener thread
-     */
-    void stop_listener();
 };
 
 /* -------------------------------------------------------------------------- */
@@ -247,6 +242,45 @@ int Driver<E>::start_driver(std::string& error)
 
     fcntl(to_drv, F_SETFD, FD_CLOEXEC);
     fcntl(from_drv, F_SETFD, FD_CLOEXEC);
+
+    //Send INIT command and wait for response (INIT [SUCCESS|FAILURE]) up to 10s
+    char   buffer[32];
+    fd_set rfds;
+
+    struct timeval tv;
+
+    FD_ZERO(&rfds);
+    FD_SET(from_drv, &rfds);
+
+    tv.tv_sec  = 10;
+    tv.tv_usec = 0;
+
+    write("INIT\n");
+
+    int rc = select(from_drv + 1, &rfds, 0, 0, &tv);
+
+    if ( rc <= 0 )
+    {
+        error = "Driver initialization time out\n";
+        return -1;
+    }
+
+    rc = read(from_drv, (void *) buffer, sizeof(char) * 31);
+
+    buffer[rc]='\0';
+
+    std::istringstream iss(buffer);
+
+    std::string action;
+    std::string result;
+
+    iss >> action >> result >> std::ws;
+
+    if ( action != "INIT" || result != "SUCCESS" )
+    {
+        error = "Driver initialization failed\n";
+        return -1;
+    }
 
     return 0;
 }
