@@ -110,7 +110,7 @@ class ServiceLCM
             if service.all_roles_running?
                 service.set_state(Service::STATE['RUNNING'])
             elsif service.instance_of?(Straight)
-                @am.trigger_action(:deploy, service.id, service)
+                @am.trigger_action(:deploy, service.id, service_id)
             end
 
             service.update

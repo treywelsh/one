@@ -29,6 +29,24 @@ class EventManager
         'WAIT_DEPLOY' => :wait_deploy
     }
 
+    FAILURE_STATES = %w[
+        BOOT_FAILURE
+        BOOT_MIGRATE_FAILURE
+        PROLOG_MIGRATE_FAILURE
+        PROLOG_FAILURE
+        EPILOG_FAILURE
+        EPILOG_STOP_FAILURE
+        EPILOG_UNDEPLOY_FAILURE
+        PROLOG_MIGRATE_POWEROFF_FAILURE
+        PROLOG_MIGRATE_SUSPEND_FAILURE
+        PROLOG_MIGRATE_UNKNOWN_FAILURE
+        BOOT_UNDEPLOY_FAILURE
+        BOOT_STOPPED_FAILURE
+        PROLOG_RESUME_FAILURE
+        PROLOG_UNDEPLOY_FAILURE
+    ]
+
+
     def initialize(concurrency)
         @zmq_endpoint = 'tcp://localhost:2101'
         @lcm = nil
@@ -55,7 +73,7 @@ class EventManager
             file.write("deploy wait (#{service_id})\n")
         end
         subscriber = @context.socket(ZMQ::SUB)
-        # Set timeout
+        # Set timeout (TODO add option for customize timeout)
         subscriber.setsockopt(ZMQ::RCVTIMEO, 30*1000)
         subscriber.connect(@zmq_endpoint)
 
@@ -73,7 +91,18 @@ class EventManager
             subscriber.recv_string(content)
 
             if timeo == -1
-                next unless check_vms(nodes)
+                empty, fail_nodes = check_nodes(nodes)
+
+                next if !empty && fail_nodes.empty?
+
+                if !fail_nodes.empty?
+                    # TODO, propagate error
+                    return
+                end
+
+                # TODO, what if !empty && !fail_nodes.empty?
+
+                break
             end
 
             id = retrieve_id(key)
@@ -83,21 +112,19 @@ class EventManager
 
         end
 
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy wait end (#{service_id})\n")
-        end
-
         # Todo, check if OneGate confirmation is needed
         # Todo, return false (5th parameter) if timeout reached and polling fails
         @lcm.trigger_action(:deploy_cb, service_id, service_id, role_name, true)
     end
 
     def subscribe(vm_id, state, lcm_state, subscriber)
-        subscriber.setsockopt(ZMQ::SUBSCRIBE, gen_filter(vm_id, state, lcm_state))
+        subscriber.setsockopt(ZMQ::SUBSCRIBE,
+                              gen_filter(vm_id, state, lcm_state))
     end
 
     def unsubscribe(vm_id, state, lcm_state, subscriber)
-        subscriber.setsockopt(ZMQ::UNSUBSCRIBE, gen_filter(vm_id, state, lcm_state))
+        subscriber.setsockopt(ZMQ::UNSUBSCRIBE,
+                              gen_filter(vm_id, state, lcm_state))
     end
 
     def gen_filter(vm_id, state, lcm_state)
@@ -106,6 +133,36 @@ class EventManager
 
     def retrieve_id(key)
         key.split('/')[-1].to_i
+    end
+
+    def check_nodes(nodes, state, lcm_state)
+        failure_nodes = []
+
+        nodes.delete_if do |node|
+            vm = OpenNebula::VirtualMachine
+                 .new_with_id(node, @service.client) # TODO, get client
+                 .to_hash
+
+            vm_state     = OpenNebula::VirtualMachine.VM_STATE[vm.state]
+            vm_lcm_state = OpenNebula::VirtualMachine.LCM_STATE[vm.lcm_state]
+
+            if state == 'DONE' ||
+               (vm_state == state && vm_lcm_state == lcm_state)
+                unsubscribe(node, state, lcm_state, subscriber)
+
+                true
+            end
+
+            if FAILURE_STATES.include? vm_lcm_state
+                failure_nodes.append(node)
+
+                true
+            end
+
+            false
+        end
+
+        [nodes.empty?, failure_nodes]
     end
 
 end
