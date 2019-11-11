@@ -142,7 +142,7 @@ ServiceTemplate.init_default_vn_name_template(conf[:vn_name_template])
 ##############################################################################
 
 lcm = ServiceLCM.new(10, cloud_auth)
-em  = EventManager.new(10)
+em  = EventManager.new(10, cloud_auth.client)
 
 lcm.event_manager = em.am
 em.lcm = lcm.am

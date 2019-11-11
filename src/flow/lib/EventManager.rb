@@ -47,11 +47,12 @@ class EventManager
     ]
 
 
-    def initialize(concurrency)
+    def initialize(concurrency, client)
         @zmq_endpoint = 'tcp://localhost:2101'
         @lcm = nil
         @am = ActionManager.new(concurrency, true)
         @context = ZMQ::Context.new(1)
+        @client = client
 
         # Register Action Manager actions
         @am.register_action(ACTIONS['WAIT_DEPLOY'], method('wait_deploy_action'))
@@ -69,12 +70,9 @@ class EventManager
     # @param [Role] the role which contains the VMs
     # @param [Node] nodes the list of nodes (VMs) to wait for
     def wait_deploy_action(service_id, role_name, nodes)
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy wait (#{service_id})\n")
-        end
         subscriber = @context.socket(ZMQ::SUB)
         # Set timeout (TODO add option for customize timeout)
-        subscriber.setsockopt(ZMQ::RCVTIMEO, 30*1000)
+        subscriber.setsockopt(ZMQ::RCVTIMEO, 15*1000)
         subscriber.connect(@zmq_endpoint)
 
         nodes.each do |node|
@@ -91,7 +89,7 @@ class EventManager
             subscriber.recv_string(content)
 
             if timeo == -1
-                empty, fail_nodes = check_nodes(nodes)
+                empty, fail_nodes = check_nodes(nodes, 'ACTIVE', 'RUNNING')
 
                 next if !empty && fail_nodes.empty?
 
@@ -140,13 +138,14 @@ class EventManager
 
         nodes.delete_if do |node|
             vm = OpenNebula::VirtualMachine
-                 .new_with_id(node, @service.client) # TODO, get client
-                 .to_hash
+                 .new_with_id(node, @client)
 
-            vm_state     = OpenNebula::VirtualMachine.VM_STATE[vm.state]
-            vm_lcm_state = OpenNebula::VirtualMachine.LCM_STATE[vm.lcm_state]
+            vm.info
 
-            if state == 'DONE' ||
+            vm_state     = OpenNebula::VirtualMachine::VM_STATE[vm.state]
+            vm_lcm_state = OpenNebula::VirtualMachine::LCM_STATE[vm.lcm_state]
+
+            if vm_state == 'DONE' ||
                (vm_state == state && vm_lcm_state == lcm_state)
                 unsubscribe(node, state, lcm_state, subscriber)
 

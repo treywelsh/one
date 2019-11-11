@@ -47,15 +47,7 @@ class ServiceLCM
     # Actions
     ############################################################################
     def deploy_action(service_id)
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy action (#{service_id})\n")
-        end
-
         @srv_pool.get(service_id) do |service|
-            File.open('/tmp/loga', 'a') do |file|
-                file.write("deploy action loop\n")
-            end
-
             set_deploy_strategy(service)
 
             roles = service.roles_deploy
@@ -84,10 +76,6 @@ class ServiceLCM
 
             service.update
         end
-
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy action (something went wrong)\n")
-        end
     end
 
     ############################################################################
@@ -95,9 +83,6 @@ class ServiceLCM
     ############################################################################
 
     def deploy_cb(service_id, role_name, result)
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy cb (#{role_name})\n")
-        end
         @srv_pool.get(service_id) do |service|
             if !result
                 service.set_state(Service::STATE['ERROR_DEPLOYING'])
@@ -109,14 +94,11 @@ class ServiceLCM
 
             if service.all_roles_running?
                 service.set_state(Service::STATE['RUNNING'])
-            elsif service.instance_of?(Straight)
+            elsif service.strategy == 'straight'
                 @am.trigger_action(:deploy, service.id, service_id)
             end
 
             service.update
-        end
-        File.open('/tmp/loga', 'a') do |file|
-            file.write("deploy cb end (#{role_name})\n")
         end
     end
 

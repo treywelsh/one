@@ -16,8 +16,8 @@
 
 require 'strategy/straight'
 
-# Strategy class
-class Strategy
+# Strategy class (module none?)
+module Strategy
 
     LOG_COMP = 'STR'
 
