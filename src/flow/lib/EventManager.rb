@@ -26,7 +26,8 @@ class EventManager
     LOG_COMP = 'EM'
 
     ACTIONS = {
-        'WAIT_DEPLOY' => :wait_deploy
+        'WAIT_DEPLOY' => :wait_deploy,
+        'WAIT_UNDEPLOY' => :wait_undeploy
     }
 
     FAILURE_STATES = %w[
@@ -46,7 +47,6 @@ class EventManager
         PROLOG_UNDEPLOY_FAILURE
     ]
 
-
     def initialize(concurrency, client)
         @zmq_endpoint = 'tcp://localhost:2101'
         @lcm = nil
@@ -56,6 +56,7 @@ class EventManager
 
         # Register Action Manager actions
         @am.register_action(ACTIONS['WAIT_DEPLOY'], method('wait_deploy_action'))
+        @am.register_action(ACTIONS['WAIT_UNDEPLOY'], method('wait_undeploy_action'))
 
         Thread.new { @am.start_listener }
     end
@@ -70,49 +71,35 @@ class EventManager
     # @param [Role] the role which contains the VMs
     # @param [Node] nodes the list of nodes (VMs) to wait for
     def wait_deploy_action(service_id, role_name, nodes)
+        Log.info LOG_COMP, "Waiting (ACTIVE,RUNNING) for #{nodes}"
+        wait(nodes, 'ACTIVE', 'RUNNING')
+
+        # Todo, check if OneGate confirmation is needed
+        # Todo, return false (5th parameter) if timeout reached and polling fails
+        @lcm.trigger_action(:deploy_cb, service_id, service_id, role_name, true)
+    end
+
+    # Wait for nodes to be in DONE
+    # @param [service_id] the service id
+    # @param [role_name] the role name of the role which contains the VMs
+    # @param [nodes] the list of nodes (VMs) to wait for
+    def wait_undeploy_action(service_id, role_name, nodes)
+        Log.info LOG_COMP, "Waiting (DONE,LCM_INIT) for #{nodes}"
+        wait(nodes, 'DONE', 'LCM_INIT')
+
+        @lcm.trigger_action(:undeploy_cb, service_id, service_id, role_name, true)
+    end
+
+    ############################################################################
+    # Helpers
+    ############################################################################
+    def gen_subscriber
         subscriber = @context.socket(ZMQ::SUB)
         # Set timeout (TODO add option for customize timeout)
         subscriber.setsockopt(ZMQ::RCVTIMEO, 15*1000)
         subscriber.connect(@zmq_endpoint)
 
-        nodes.each do |node|
-            # TODO, use enums for states
-            subscribe(node, 'ACTIVE', 'RUNNING', subscriber)
-        end
-
-        key = ''
-        content = ''
-
-        # Todo, add timeout, on timeout poll for the nodes if not running fails
-        until nodes.empty?
-            timeo = subscriber.recv_string(key)
-            subscriber.recv_string(content)
-
-            if timeo == -1
-                empty, fail_nodes = check_nodes(nodes, 'ACTIVE', 'RUNNING')
-
-                next if !empty && fail_nodes.empty?
-
-                if !fail_nodes.empty?
-                    # TODO, propagate error
-                    return
-                end
-
-                # TODO, what if !empty && !fail_nodes.empty?
-
-                break
-            end
-
-            id = retrieve_id(key)
-
-            nodes.delete(id)
-            unsubscribe(id, 'ACTIVE', 'RUNNING', subscriber)
-
-        end
-
-        # Todo, check if OneGate confirmation is needed
-        # Todo, return false (5th parameter) if timeout reached and polling fails
-        @lcm.trigger_action(:deploy_cb, service_id, service_id, role_name, true)
+        subscriber
     end
 
     def subscribe(vm_id, state, lcm_state, subscriber)
@@ -131,6 +118,50 @@ class EventManager
 
     def retrieve_id(key)
         key.split('/')[-1].to_i
+    end
+
+    def wait(nodes, state, lcm_state)
+        subscriber = gen_subscriber
+
+        nodes.each do |node|
+            # TODO, use enums for states
+            subscribe(node, state, lcm_state, subscriber)
+        end
+
+        key = ''
+        content = ''
+
+        until nodes.empty?
+            # Read key
+            timeo = subscriber.recv_string(key)
+
+            if timeo == -1 && ZMQ::Util.errno != ZMQ::EAGAIN
+                raise 'Error reading from subscriber.'
+            end
+
+            if timeo == -1
+                empty, fail_nodes = check_nodes(nodes, state, lcm_state)
+
+                next if !empty && fail_nodes.empty?
+
+                if !fail_nodes.empty?
+                    # TODO, propagate error
+                    return
+                end
+
+                # TODO, what if !empty && !fail_nodes.empty?
+
+                break
+            end
+
+            # Read content (if there is no errors)
+            subscriber.recv_string(content)
+
+            id = retrieve_id(key)
+
+            nodes.delete(id)
+            unsubscribe(id, state, lcm_state, subscriber)
+        end
     end
 
     def check_nodes(nodes, state, lcm_state)

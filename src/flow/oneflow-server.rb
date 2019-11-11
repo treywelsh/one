@@ -179,62 +179,20 @@ get '/service/:id' do
 end
 
 delete '/service/:id' do
-    service_pool = OpenNebula::ServicePool.new(@client)
-
-    rc = nil
-    service = service_pool.get(params[:id]) { |service|
-        next if service.state == Service::STATE['DELETING']
-
-        service.set_state(Service::STATE['DELETING'])
-        rc = service.update
-
-        Thread.new do
-            context    = ZMQ::Context.new(1)
-            subscriber = context.socket(ZMQ::SUB)
-
-            service_json = JSON.parse(service.to_json)
-            vm_ids = service_json['DOCUMENT']['TEMPLATE']['BODY']['roles']
-                     .flat_map do |role| role['nodes']
-                         .flat_map { |node| node['deploy_id']}
-                     end
-
-            vm_ids.each do |id|
-                subscriber.setsockopt(ZMQ::SUBSCRIBE, "EVENT STATE VM/DONE/LCM_INIT/#{id}")
-            end
-
-            subscriber.connect("tcp://localhost:2101")
-
-            service.delete_roles
-
-            while !vm_ids.empty?
-                key     =''
-                content = ''
-                subscriber.recv_string(key)
-                subscriber.recv_string(content)
-
-                vm_id = key.split[2].split('/')[3].to_i
-
-                vm_ids.delete(vm_id)
-            end
-
-            subscriber.close
-            service.delete
-
-        end
-
-        if OpenNebula.is_error?(rc)
-            Log.error LOG_COMP, 'Error trying to update ' \
-                                "Service #{service.id()} : #{rc.message}"
-        end
-    }
+    # Read-only object
+    service = OpenNebula::Service.new_with_id params[:id], @client
 
     if OpenNebula.is_error?(service)
-        error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+        error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
+        return status 204 # TODO, check propor return code
     end
 
-    if OpenNebula.is_error?(rc)
-        error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
-    end
+    service.info
+
+    return status 204 if service.state == Service::STATE['DELETING']
+
+    # Starts service undeploying async
+    lcm.am.trigger_action(:undeploy, service.id, service.id)
 
     status 204
 end

@@ -369,20 +369,18 @@ module OpenNebula
         # @return [Array<true, nil>, Array<false, String>] true if all the VMs
         # were terminated, false and the error reason if there was a problem
         # shutting down the VMs
-        def shutdown(scale_down=false)
+        def shutdown(scale_down = false)
             success = true
 
-            nodes = nodes
-
             if scale_down
-                n_nodes = nodes.size - cardinality()
+                n_nodes = nodes.size - cardinality
             else
                 n_nodes = nodes.size
             end
 
             shutdown_nodes(nodes[0..n_nodes-1], scale_down)
 
-            return [success, nil]
+            [success, nil]
         end
 
         # Delete all the nodes in this role
@@ -1074,7 +1072,7 @@ module OpenNebula
             action = @body['shutdown_action']
 
             if action.nil?
-                action = @service.get_shutdown_action()
+                action = @service.shutdown_action
             end
 
             if action.nil?

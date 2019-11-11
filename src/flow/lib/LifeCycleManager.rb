@@ -26,8 +26,13 @@ class ServiceLCM
     LOG_COMP = 'LCM'
 
     ACTIONS = {
+        # Actions
         'DEPLOY' => :deploy,
-        'DEPLOY_CB' => :deploy_cb
+        'UNDEPLOY' => :undeploy,
+
+        # Callbacks
+        'DEPLOY_CB' => :deploy_cb,
+        'UNDEPLOY_CB' => :undeploy_cb
     }
 
     def initialize(concurrency, cloud_auth)
@@ -39,6 +44,8 @@ class ServiceLCM
         # Register Action Manager actions
         @am.register_action(ACTIONS['DEPLOY'], method('deploy_action'))
         @am.register_action(ACTIONS['DEPLOY_CB'], method('deploy_cb'))
+        @am.register_action(ACTIONS['UNDEPLOY'], method('undeploy_action'))
+        @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
 
         Thread.new { @am.start_listener }
     end
@@ -78,6 +85,38 @@ class ServiceLCM
         end
     end
 
+    def undeploy_action(service_id)
+        File.open('/tmp/logaa', 'a') do |file|
+            file.write("undeploy_cb(#{service_id})")
+        end
+        @srv_pool.get(service_id) do |service|
+            set_deploy_strategy(service)
+
+            roles = service.roles_shutdown
+
+            if roles.empty? && service.all_roles_done?
+                service.set_state(Service::STATE['DONE'])
+                service.update
+                break
+            end
+
+            service.set_state(Service::STATE['DELETING'])
+
+            roles.each do |_name, role|
+                role.set_state(Role::STATE['DELETING'])
+                role.shutdown
+
+                @event_manager.trigger_action(:wait_undeploy,
+                                              service.id,
+                                              service.id,
+                                              role.name,
+                                              role.nodes_ids)
+            end
+
+            service.update
+        end
+    end
+
     ############################################################################
     # Callbacks
     ############################################################################
@@ -102,6 +141,32 @@ class ServiceLCM
         end
     end
 
+    def undeploy_cb(service_id, role_name, result)
+        @srv_pool.get(service_id) do |service|
+            if !result
+                service.set_state(Service::STATE['ERROR_UNDEPLOYING'])
+                service.update
+                break
+            end
+
+            service.roles[role_name].set_state(Role::STATE['DONE'])
+
+            if service.all_roles_done?
+                vnets = JSON.parse(service['TEMPLATE/BODY'])['networks_values']
+                delete_networks(vnets)
+                service.set_state(Service::STATE['DONE'])
+            elsif service.strategy == 'straight'
+                @am.trigger_action(:undeploy, service.id, service_id)
+            end
+
+            service.update
+        end
+    end
+
+    ############################################################################
+    # Helpers
+    ############################################################################
+
     # Returns the deployment strategy for the given Service
     # @param [Service] service the service
     # rubocop:disable Naming/AccessorMethodName
@@ -112,6 +177,22 @@ class ServiceLCM
             service.extend(Straight)
         else
             service.extend(Strategy)
+        end
+    end
+
+    # Deletes the vnets created for the service
+    def delete_networks(vnets)
+        vnets.each do |vnet|
+            next unless vnet[vnet.keys[0]].key? 'template_id'
+
+            vnet_id = vnet[vnet.keys[0]]['id'].to_i
+
+            rc = OpenNebula::VirtualNetwork
+                 .new_with_id(vnet_id, @cloud_auth.client).delete
+
+            if OpenNebula.is_error?(rc)
+                Log.info LOG_COMP, "Error deleting vnet #{vnet_id}: #{rc}"
+            end
         end
     end
 
