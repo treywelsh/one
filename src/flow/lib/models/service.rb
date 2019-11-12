@@ -35,8 +35,6 @@ module OpenNebula
             'SCALING'            => 8,
             'FAILED_SCALING'     => 9,
             'COOLDOWN'           => 10,
-            'DELETING'           => 11,
-            'FAILED_DELETING'    => 12
         }
 
         STATE_STR = %w[
@@ -53,6 +51,12 @@ module OpenNebula
             COOLDOWN
             DELETING
             FAILED_DELETING
+        ]
+
+        TRANSIENT_STATES = %w[
+            DEPLOYING
+            UNDEPLOYING
+            SCALING
         ]
 
         LOG_COMP = 'SER'
@@ -73,6 +77,10 @@ module OpenNebula
         # @return the state string
         def state_str
             STATE_STR[state]
+        end
+
+        def transient_state?
+            TRANSIENT_STATES.include? STATE_STR[state]
         end
 
         # Sets a new state

@@ -170,14 +170,14 @@ class EventManager
                (vm_state == state && vm_lcm_state == lcm_state)
                 unsubscribe(node, state, lcm_state, subscriber)
 
-                true
+                next true
             end
 
             if FAILURE_STATES.include? vm_lcm_state
                 Log.error LOG_COMP, "Node #{node} is in FAILURE state"
                 failure_nodes.append(node)
 
-                true
+                next true
             end
 
             false

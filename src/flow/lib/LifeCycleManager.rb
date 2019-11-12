@@ -104,6 +104,10 @@ class ServiceLCM
         @srv_pool.get(service_id) do |service|
             set_deploy_strategy(service)
 
+            # If the service is in transient state,
+            # stop current action before undeploying the service
+            @event_manager.cancel_action(service_id) if service.transient_state?
+
             roles = service.roles_shutdown
 
             if roles.empty?
@@ -115,7 +119,7 @@ class ServiceLCM
                 break
             end
 
-            service.set_state(Service::STATE['DELETING'])
+            service.set_state(Service::STATE['UNDEPLOYING'])
 
             roles.each do |_name, role|
                 rc = role.shutdown
@@ -128,7 +132,7 @@ class ServiceLCM
                     break
                 end
 
-                role.set_state(Role::STATE['DELETING'])
+                role.set_state(Role::STATE['UNDEPLOYING'])
 
                 @event_manager.trigger_action(:wait_undeploy,
                                               service.id,
