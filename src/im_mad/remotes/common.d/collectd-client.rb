@@ -118,7 +118,7 @@ port                = ARGV[2]
 monitor_push_period = ARGV[3]
 number              = ARGV[4]
 
-monitor_push_period = monitor_push_period.split('-').first
+monitor_push_period = monitor_push_period.split('-').first.to_i
 
 host = ENV['SSH_CLIENT'].split.first
 probes_args = ARGV[1..-1].join(' ')
