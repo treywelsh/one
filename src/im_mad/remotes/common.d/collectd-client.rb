@@ -115,11 +115,10 @@ end
 hypervisor          = ARGV[0]
 # ds_location         = ARGV[1]
 port                = ARGV[2]
-monitor_push_period = ARGV[3].to_i
+monitor_push_period = ARGV[3]
 number              = ARGV[4]
 
-# TODO: Hard coded default
-monitor_push_period = 20 if monitor_push_period == 0
+monitor_push_period = monitor_push_period.split('-').first
 
 host = ENV['SSH_CLIENT'].split.first
 probes_args = ARGV[1..-1].join(' ')
