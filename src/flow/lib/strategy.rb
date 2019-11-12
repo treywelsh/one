@@ -28,8 +28,7 @@ module Strategy
     # @return [Hash<String, Role>] Roles
     def roles_deploy
         result = roles.select do |_name, role|
-            role.state == Role::STATE['PENDING'] ||
-                role.state == Role::STATE['DEPLOYING']
+            role.state == Role::STATE['PENDING']
         end
 
         # Ruby 1.8 compatibility

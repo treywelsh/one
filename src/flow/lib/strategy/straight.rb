@@ -90,8 +90,6 @@ module Straight
                         break
                     end
                 end
-            elsif role.state == Role::STATE['DEPLOYING']
-                check = true
             else
                 check = false
             end

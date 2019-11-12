@@ -27,12 +27,14 @@ class ServiceLCM
 
     ACTIONS = {
         # Actions
-        'DEPLOY' => :deploy,
+        'DEPLOY'   => :deploy,
         'UNDEPLOY' => :undeploy,
 
         # Callbacks
-        'DEPLOY_CB' => :deploy_cb,
-        'UNDEPLOY_CB' => :undeploy_cb
+        'DEPLOY_CB'           => :deploy_cb,
+        'DEPLOY_FAILURE_CB'   => :deploy_faillure_cb,
+        'UNDEPLOY_CB'         => :undeploy_cb,
+        'UNDEPLOY_FAILURE_CB' => :UNdeploy_faillure_cb
     }
 
     def initialize(concurrency, cloud_auth)
@@ -44,8 +46,10 @@ class ServiceLCM
         # Register Action Manager actions
         @am.register_action(ACTIONS['DEPLOY'], method('deploy_action'))
         @am.register_action(ACTIONS['DEPLOY_CB'], method('deploy_cb'))
+        @am.register_action(ACTIONS['DEPLOY_FAILURE_CB'], method('deploy_failure_cb'))
         @am.register_action(ACTIONS['UNDEPLOY'], method('undeploy_action'))
         @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
+        @am.register_action(ACTIONS['UNDEPLOY_FAILURE_CB'], method('undeploy_failure_cb'))
 
         Thread.new { @am.start_listener }
     end
@@ -60,13 +64,15 @@ class ServiceLCM
             roles = service.roles_deploy
 
             # Maybe roles.empty? because are being deploying in other threads
-            if roles.empty? && service.all_roles_running?
-                service.set_state(Service::STATE['RUNNING'])
-                service.update
+            if roles.empty?
+                if service.all_roles_running?
+                    service.set_state(Service::STATE['RUNNING'])
+                    service.update
+                end
+
+                # If there is no node in PENDING the service is not modified.
                 break
             end
-
-            # TODO, What if there is no roles?
 
             service.set_state(Service::STATE['DEPLOYING'])
 
@@ -86,17 +92,17 @@ class ServiceLCM
     end
 
     def undeploy_action(service_id)
-        File.open('/tmp/logaa', 'a') do |file|
-            file.write("undeploy_cb(#{service_id})")
-        end
         @srv_pool.get(service_id) do |service|
             set_deploy_strategy(service)
 
             roles = service.roles_shutdown
 
-            if roles.empty? && service.all_roles_done?
-                service.set_state(Service::STATE['DONE'])
-                service.update
+            if roles.empty?
+                if service.all_roles_done?
+                    service.set_state(Service::STATE['DONE'])
+                    service.update
+                end
+                # If there is no node which needs to be shutdown the service is not modified.
                 break
             end
 
@@ -121,14 +127,8 @@ class ServiceLCM
     # Callbacks
     ############################################################################
 
-    def deploy_cb(service_id, role_name, result)
+    def deploy_cb(service_id, role_name)
         @srv_pool.get(service_id) do |service|
-            if !result
-                service.set_state(Service::STATE['ERROR_DEPLOYING'])
-                service.update
-                break
-            end
-
             service.roles[role_name].set_state(Role::STATE['RUNNING'])
 
             if service.all_roles_running?
@@ -141,14 +141,17 @@ class ServiceLCM
         end
     end
 
-    def undeploy_cb(service_id, role_name, result)
+    def deploy_failure_cb(service_id, role_name)
         @srv_pool.get(service_id) do |service|
-            if !result
-                service.set_state(Service::STATE['ERROR_UNDEPLOYING'])
-                service.update
-                break
-            end
+            service.set_state(Service::STATE['FAILED_DEPLOYING'])
+            service.roles[role_name].set_state(Role::STATE['FAILED_DEPLOYING'])
 
+            service.update
+        end
+    end
+
+    def undeploy_cb(service_id, role_name)
+        @srv_pool.get(service_id) do |service|
             service.roles[role_name].set_state(Role::STATE['DONE'])
 
             if service.all_roles_done?
@@ -158,6 +161,15 @@ class ServiceLCM
             elsif service.strategy == 'straight'
                 @am.trigger_action(:undeploy, service.id, service_id)
             end
+
+            service.update
+        end
+    end
+
+    def undeploy_failure_cb(service_id, role_name)
+        @srv_pool.get(service_id) do |service|
+            service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
+            service.roles[role_name].set_state(Role::STATE['FAILED_UNDEPLOYING'])
 
             service.update
         end

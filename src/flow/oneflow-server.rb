@@ -92,19 +92,18 @@ use Rack::Session::Pool, :key => 'oneflow'
 Log.logger = logger
 Log.level  = conf[:debug_level].to_i
 
+LOG_COMP = 'ONEFLOW'
 
-LOG_COMP = "ONEFLOW"
-
-Log.info LOG_COMP, "Starting server"
+Log.info LOG_COMP, 'Starting server'
 
 begin
-    ENV["ONE_CIPHER_AUTH"] = ONEFLOW_AUTH
+    ENV['ONE_CIPHER_AUTH'] = ONEFLOW_AUTH
     cloud_auth = CloudAuth.new(conf)
 rescue => e
     message = "Error initializing authentication system : #{e.message}"
     Log.error LOG_COMP, message
     STDERR.puts message
-    exit -1
+    exit(-1)
 end
 
 set :cloud_auth, cloud_auth
@@ -121,7 +120,7 @@ before do
 
         @client = OpenNebula::Client.new("#{username}:#{password}", conf[:one_xmlrpc])
     else
-        error 401, "A username and password must be provided"
+        error 401, 'A username and password must be provided'
     end
 end
 
@@ -142,7 +141,13 @@ ServiceTemplate.init_default_vn_name_template(conf[:vn_name_template])
 ##############################################################################
 
 lcm = ServiceLCM.new(10, cloud_auth)
-em  = EventManager.new(10, cloud_auth.client)
+
+em_conf = {
+    :client      => cloud_auth.client,
+    :concurrency => 10
+}
+
+em = EventManager.new(em_conf)
 
 lcm.event_manager = em.am
 em.lcm = lcm.am
@@ -182,12 +187,12 @@ delete '/service/:id' do
     # Read-only object
     service = OpenNebula::Service.new_with_id params[:id], @client
 
-    if OpenNebula.is_error?(service)
+    rc = service.info
+
+    if OpenNebula.is_error?(rc)
         error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
         return status 204 # TODO, check propor return code
     end
-
-    service.info
 
     return status 204 if service.state == Service::STATE['DELETING']
 
@@ -203,7 +208,9 @@ post '/service/:id/action' do
     opts   = action['params']
 
     rc = nil
-    service = service_pool.get(params[:id]) { |service|
+    service_rc = service_pool.get(params[:id]) do |service|
+        # rubocop:disable Layout/CaseIndentation
+        # rubocop:disable Layout/EndAlignment
         rc = case action['perform']
         when 'shutdown'
             service.shutdown
@@ -211,46 +218,52 @@ post '/service/:id/action' do
             service.recover
         when 'chown'
             if opts && opts['owner_id']
-                args = Array.new
+                args = []
                 args << opts['owner_id'].to_i
                 args << (opts['group_id'] || -1).to_i
 
                 ret = service.chown(*args)
 
                 if !OpenNebula.is_error?(ret)
-                    Log.info(LOG_COMP, "Service owner changed to #{args[0]}:#{args[1]}", params[:id])
+                    Log.info(LOG_COMP,
+                             "Service owner changed to #{args[0]}:#{args[1]}",
+                             params[:id])
                 end
 
                 ret
             else
-                OpenNebula::Error.new("Action #{action['perform']}: " <<
-                        "You have to specify a UID")
+                OpenNebula::Error.new("Action #{action['perform']}: " \
+                        'You have to specify a UID')
             end
         when 'chgrp'
             if opts && opts['group_id']
                 ret = service.chown(-1, opts['group_id'].to_i)
 
                 if !OpenNebula.is_error?(ret)
-                    Log.info(LOG_COMP, "Service group changed to #{opts['group_id']}", params[:id])
+                    Log.info(LOG_COMP,
+                             "Service group changed to #{opts['group_id']}",
+                             params[:id])
                 end
 
                 ret
             else
-                OpenNebula::Error.new("Action #{action['perform']}: " <<
-                        "You have to specify a GID")
+                OpenNebula::Error.new("Action #{action['perform']}: " \
+                        'You have to specify a GID')
             end
         when 'chmod'
             if opts && opts['octet']
                 ret = service.chmod_octet(opts['octet'])
 
                 if !OpenNebula.is_error?(ret)
-                    Log.info(LOG_COMP, "Service permissions changed to #{opts['octet']}", params[:id])
+                    Log.info(LOG_COMP,
+                             "Service permissions changed to #{opts['octet']}",
+                             params[:id])
                 end
 
                 ret
             else
-                OpenNebula::Error.new("Action #{action['perform']}: " <<
-                        "You have to specify an OCTET")
+                OpenNebula::Error.new("Action #{action['perform']}: " \
+                        'You have to specify an OCTET')
             end
         when 'rename'
             service.rename(opts['name'])
@@ -267,20 +280,22 @@ post '/service/:id/action' do
                     rc = service.update_raw(opts['template_raw'], true)
                     status 204
                 else
-                    OpenNebula::Error.new("Action #{action['perform']}: " <<
-                            "You have to provide a template")
+                    OpenNebula::Error.new("Action #{action['perform']}: " \
+                            'You have to provide a template')
                 end
             else
-                OpenNebula::Error.new("Action #{action['perform']}: " <<
-                        "Only supported for append")
+                OpenNebula::Error.new("Action #{action['perform']}: " \
+                        'Only supported for append')
             end
         else
             OpenNebula::Error.new("Action #{action['perform']} not supported")
         end
-    }
+        # rubocop:enable Layout/CaseIndentation
+        # rubocop:enable Layout/EndAlignment
+    end
 
-    if OpenNebula.is_error?(service)
-        error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+    if OpenNebula.is_error?(service_rc)
+        error CloudServer::HTTP_ERROR_CODE[service_rc.errno], service_rc.message
     end
 
     if OpenNebula.is_error?(rc)
@@ -291,11 +306,10 @@ post '/service/:id/action' do
 end
 
 put '/service/:id/role/:name' do
-
     service_pool = OpenNebula::ServicePool.new(@client)
 
     rc = nil
-    service = service_pool.get(params[:id]) do |service|
+    service_rc = service_pool.get(params[:id]) do |service|
         begin
             rc = service.update_role(params[:name], request.body.read)
         rescue Validator::ParseException, JSON::ParserError
@@ -303,8 +317,8 @@ put '/service/:id/role/:name' do
         end
     end
 
-    if OpenNebula.is_error?(service)
-        error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+    if OpenNebula.is_error?(service_rc)
+        error CloudServer::HTTP_ERROR_CODE[service_rc.errno], service_rc.message
     end
 
     if OpenNebula.is_error?(rc)
