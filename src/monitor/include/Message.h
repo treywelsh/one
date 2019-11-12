@@ -128,7 +128,7 @@ int Message<E>::parse_from(const std::string& input)
         goto error;
     }
 
-    is >> buffer >> std::ws;
+    is >> buffer;
 
     _type = _type_str._from_str(buffer.c_str());
 
@@ -139,7 +139,13 @@ int Message<E>::parse_from(const std::string& input)
 
     buffer.clear();
 
-    is >> buffer >> std::ws;
+    is >> buffer;
+
+    if (buffer.empty())
+    {
+        _payload.clear();
+        return 0;
+    }
 
     base64_decode(buffer, payloaz);
 
@@ -167,14 +173,17 @@ int Message<E>::write_to(std::string& out) const
     std::string payloaz;
     std::string payloaz64;
 
-    if (zlib_compress(_payload, payloaz) == -1)
+    if (!_payload.empty())
     {
-        return -1;
-    }
+        if (zlib_compress(_payload, payloaz) == -1)
+        {
+            return -1;
+        }
 
-    if ( base64_encode(payloaz, payloaz64) == -1)
-    {
-        return -1;
+        if ( base64_encode(payloaz, payloaz64) == -1)
+        {
+            return -1;
+        }
     }
 
     out = _type_str._to_str(_type);
