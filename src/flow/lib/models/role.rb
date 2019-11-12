@@ -370,15 +370,13 @@ module OpenNebula
         # were terminated, false and the error reason if there was a problem
         # shutting down the VMs
         def shutdown(scale_down = false)
-            success = true
-
             if scale_down
                 n_nodes = nodes.size - cardinality
             else
                 n_nodes = nodes.size
             end
 
-            shutdown_nodes(nodes[0..n_nodes-1], scale_down)
+            success = shutdown_nodes(nodes[0..n_nodes-1], scale_down)
 
             [success, nil]
         end
@@ -1064,10 +1062,10 @@ module OpenNebula
             @body['nodes'] = new_nodes
         end
 
-
         # Shuts down all the given nodes
         # @param scale_down [true,false] True to set the 'disposed' node flag
         def shutdown_nodes(nodes, scale_down)
+            success = true
 
             action = @body['shutdown_action']
 
@@ -1115,7 +1113,6 @@ module OpenNebula
                         @service.log_error(msg)
 
                         success = false
-                        #return [false, rc.message]
                     else
                         Log.debug LOG_COMP, "Role #{name} : Delete success for VM #{vm_id}", @service.id()
                     end
@@ -1123,6 +1120,8 @@ module OpenNebula
                     Log.debug LOG_COMP, "Role #{name} : Terminate success for VM #{vm_id}", @service.id()
                 end
             }
+
+            success
         end
 
         def vm_failure?(node)

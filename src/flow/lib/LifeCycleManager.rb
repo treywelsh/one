@@ -77,8 +77,17 @@ class ServiceLCM
             service.set_state(Service::STATE['DEPLOYING'])
 
             roles.each do |_name, role|
+                rc = role.deploy
+
+                if !rc[0]
+                    service.set_state(Service::STATE['FAILED_DEPLOYING'])
+                    role.set_state(Role::STATE['FAILED_DEPLOYING'])
+                    service.update
+
+                    break
+                end
+
                 role.set_state(Role::STATE['DEPLOYING'])
-                role.deploy
 
                 @event_manager.trigger_action(:wait_deploy,
                                               service.id,
@@ -109,8 +118,17 @@ class ServiceLCM
             service.set_state(Service::STATE['DELETING'])
 
             roles.each do |_name, role|
+                rc = role.shutdown
+
+                if !rc[0]
+                    service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
+                    role.set_state(Role::STATE['FAILED_UNDEPLOYING'])
+                    service.update
+
+                    break
+                end
+
                 role.set_state(Role::STATE['DELETING'])
-                role.shutdown
 
                 @event_manager.trigger_action(:wait_undeploy,
                                               service.id,
