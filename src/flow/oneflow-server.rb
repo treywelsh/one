@@ -484,17 +484,17 @@ post '/service_template/:id/action' do
         # Creates service document
         service = service_template.instantiate(merge_template)
 
-        # Starts service deployment async
-        lcm.am.trigger_action(:deploy, service.id, service.id)
-
         if OpenNebula.is_error?(service)
             error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+        else
+            # Starts service deployment async
+            lcm.am.trigger_action(:deploy, service.id, service.id)
+
+            service_json = service.nil? ? '' : service.to_json
+
+            status 201
+            body service_json
         end
-
-        service_json = service.nil? ? '' : service.to_json
-
-        status 201
-        body service_json
     when 'chown'
         if opts && opts['owner_id']
             args = Array.new

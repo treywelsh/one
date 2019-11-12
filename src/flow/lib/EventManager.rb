@@ -134,7 +134,7 @@ class EventManager
                 Log.info LOG_COMP, "Timeout reached for VM #{nodes} =>"\
                                    " (#{state}, #{lcm_state})"
 
-                fail_nodes = check_nodes(nodes, state, lcm_state)
+                fail_nodes = check_nodes(nodes, state, lcm_state, subscriber)
 
                 next if !nodes.empty? && fail_nodes.empty?
 
@@ -154,7 +154,7 @@ class EventManager
         true
     end
 
-    def check_nodes(nodes, state, lcm_state)
+    def check_nodes(nodes, state, lcm_state, subscriber)
         failure_nodes = []
 
         nodes.delete_if do |node|

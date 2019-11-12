@@ -265,29 +265,19 @@ module OpenNebula
 
                     ServiceTemplate.validate(instantiate_template)
 
-                    # Instantiate VNTemplates if needed
+                    # Create networks (reserve or vntemplate) if needed
                     instantiate_template['networks_values'].each do |net|
-                        extra = ''
+                        rc = create_vnet(net) if net[net.keys[0]].key?('template_id')
 
-                        next unless net[net.keys[0]].key?('template_id')
-
-                        extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
-
-                        if !@@vn_name_template.nil?
-                            vnet_name = @@vn_name_template
-                                        .gsub('$SERVICE_ID',   id.to_s)
-                                        .gsub('$SERVICE_NAME', name.to_s)
-                                        .gsub('$ROLE_NAME',    net.keys[0])
+                        if OpenNebula.is_error?(rc)
+                            return rc
                         end
 
-                        vntmpl_id = OpenNebula::VNTemplate
-                                    .new_with_id(net[net.keys[0]]['template_id']
-                                    .to_i, @client).instantiate(vnet_name, extra)
+                        rc = reserve(net) if net[net.keys[0]].key?('reserve_from')
 
-                        # TODO, check which error should be returned
-                        return vntmpl_id if OpenNebula.is_error?(vntmpl_id)
-
-                        net[net.keys[0]]['id'] = vntmpl_id
+                        if OpenNebula.is_error?(rc)
+                            return rc
+                        end
                     end
 
                     # replace $attributes
@@ -316,15 +306,17 @@ module OpenNebula
                             end
                         end
 
-                        if role['user_inputs_values']
-                            role['vm_template_contents'] ||= ''
-                            role['user_inputs_values'].each do |key, value|
-                                role['vm_template_contents'] += "\n#{key}=\"#{value}\""
-                            end
+                        next unless role['user_inputs_values']
+
+                        role['vm_template_contents'] ||= ''
+                        role['user_inputs_values'].each do |key, value|
+                            role['vm_template_contents'] += "\n#{key}=\"#{value}\""
                         end
                     end
 
-                    service = OpenNebula::Service.new(OpenNebula::Service.build_xml, @client)
+                    service = OpenNebula::Service
+                              .new(OpenNebula::Service.build_xml, @client)
+
                     rc = service.allocate(instantiate_template.to_json)
                 rescue Validator::ParseException, JSON::ParserError
                     error 400, $!.message
@@ -342,7 +334,47 @@ module OpenNebula
             service
         end
 
-    private
+        private
+
+        def create_vnet(net)
+            extra = ''
+
+            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
+
+            if !@@vn_name_template.nil?
+                vnet_name = @@vn_name_template
+                            .gsub('$SERVICE_ID',   id.to_s)
+                            .gsub('$SERVICE_NAME', name.to_s)
+                            .gsub('$ROLE_NAME',    net.keys[0])
+            end
+
+            vntmpl_id = OpenNebula::VNTemplate
+                        .new_with_id(net[net.keys[0]]['template_id']
+                        .to_i, @client).instantiate(vnet_name, extra)
+
+            # TODO, check which error should be returned
+            return vntmpl_id if OpenNebula.is_error?(vntmpl_id)
+
+            net[net.keys[0]]['id'] = vntmpl_id
+
+            true
+        end
+
+        def reserve(net)
+            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
+
+            return false if extra.empty?
+
+            reserve_id = OpenNebula::VirtualNetwork
+                         .new_with_id(net[net.keys[0]]['reserve_from']
+                         .to_i, @client).reserve_with_extra(extra)
+
+            return reserve_id if OpenNebula.is_error?(reserve_id)
+
+            net[net.keys[0]]['id'] = reserve_id
+
+            true
+        end
 
         def self.validate_values(template)
             parser = ElasticityGrammarParser.new

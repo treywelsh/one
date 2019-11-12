@@ -155,8 +155,7 @@ class ServiceLCM
             service.roles[role_name].set_state(Role::STATE['DONE'])
 
             if service.all_roles_done?
-                vnets = JSON.parse(service['TEMPLATE/BODY'])['networks_values']
-                delete_networks(vnets)
+                delete_networks(service)
                 service.set_state(Service::STATE['DONE'])
             elsif service.strategy == 'straight'
                 @am.trigger_action(:undeploy, service.id, service_id)
@@ -193,9 +192,12 @@ class ServiceLCM
     end
 
     # Deletes the vnets created for the service
-    def delete_networks(vnets)
+    def delete_networks(service)
+        vnets = JSON.parse(service['TEMPLATE/BODY'])['networks_values']
+
         vnets.each do |vnet|
-            next unless vnet[vnet.keys[0]].key? 'template_id'
+            next unless vnet[vnet.keys[0]].key?('template_id') ||
+                        vnet[vnet.keys[0]].key?('reserve_from')
 
             vnet_id = vnet[vnet.keys[0]]['id'].to_i
 
