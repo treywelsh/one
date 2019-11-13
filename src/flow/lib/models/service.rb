@@ -478,7 +478,8 @@ module OpenNebula
         end
 
         def deploy_networks
-            @body['networks_values'].each do |net|
+            body = JSON.parse(self['TEMPLATE/BODY'])
+            body['networks_values'].each do |net|
                 rc = create_vnet(net) if net[net.keys[0]].key?('template_id')
 
                 if OpenNebula.is_error?(rc)
@@ -493,12 +494,11 @@ module OpenNebula
             end
 
             # Replace $attibute by the corresponding value
-            resolve_attributes(@body)
+            resolve_attributes(body)
 
             # @body = template.to_hash
 
-            update
-            info
+            update_body(body)
         end
 
         def delete_networks
@@ -527,6 +527,23 @@ module OpenNebula
         # Maximum number of log entries per service
         # TODO: Make this value configurable
         MAX_LOG = 50
+
+        def update_body(body)
+            @body = body
+
+            # Update @roles attribute with the new @body content
+            @roles = {}
+            if @body['roles']
+                @body['roles'].each do |elem|
+                    elem['state'] ||= Role::STATE['PENDING']
+                    role = Role.new(elem, self)
+                    @roles[role.name] = role
+                end
+            end
+
+            # Update @xml attribute with the new body content
+            @xml.at_xpath('/DOCUMENT/TEMPLATE/BODY').children[0].content = @body
+        end
 
         # @param [Logger::Severity] severity
         # @param [String] message

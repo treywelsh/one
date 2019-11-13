@@ -58,6 +58,7 @@ class ServiceLCM
     # Actions
     ############################################################################
     def deploy_action(service_id)
+        Log.info LOG_COMP, "DEPLOY_ACTION for #{service_id}"
         @srv_pool.get(service_id) do |service|
             if service.state == Service::STATE['PENDING']
                 rc = service.deploy_networks
@@ -110,9 +111,12 @@ class ServiceLCM
 
             service.update
         end
+
+        Log.info LOG_COMP, "END DEPLOY_ACTION for #{service_id}"
     end
 
     def undeploy_action(service_id)
+        Log.info LOG_COMP, "UNDEPLOY_ACTION for #{service_id}"
         @srv_pool.get(service_id) do |service|
             set_deploy_strategy(service)
 
@@ -155,6 +159,7 @@ class ServiceLCM
 
             service.update
         end
+        Log.info LOG_COMP, "END UNDEPLOY_ACTION for #{service_id}"
     end
 
     ############################################################################
@@ -162,6 +167,7 @@ class ServiceLCM
     ############################################################################
 
     def deploy_cb(service_id, role_name)
+        Log.info LOG_COMP, "DEPLOY_CB for #{service_id} #{role_name}"
         @srv_pool.get(service_id) do |service|
             service.roles[role_name].set_state(Role::STATE['RUNNING'])
 
@@ -173,18 +179,22 @@ class ServiceLCM
 
             service.update
         end
+        Log.info LOG_COMP, "END DEPLOY_CB for #{service_id} #{role_name}"
     end
 
     def deploy_failure_cb(service_id, role_name)
+        Log.info LOG_COMP, "DEPLOY_FAIL_CB for #{service_id} #{role_name}"
         @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['FAILED_DEPLOYING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_DEPLOYING'])
 
             service.update
         end
+        Log.info LOG_COMP, "END DEPLOY_FAIL_CB for #{service_id} #{role_name}"
     end
 
     def undeploy_cb(service_id, role_name)
+        Log.info LOG_COMP, "UNDEPLOY_CB for #{service_id} #{role_name}"
         @srv_pool.get(service_id) do |service|
             service.roles[role_name].set_state(Role::STATE['DONE'])
 
@@ -203,15 +213,18 @@ class ServiceLCM
 
             service.update
         end
+        Log.info LOG_COMP, "END UNDEPLOY_CB for #{service_id} #{role_name}"
     end
 
     def undeploy_failure_cb(service_id, role_name)
+        Log.info LOG_COMP, "UNDEPLOY_FAIL_CB for #{service_id} #{role_name}"
         @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_UNDEPLOYING'])
 
             service.update
         end
+        Log.info LOG_COMP, "END UNDEPLOY_FAIL_CB for #{service_id} #{role_name}"
     end
 
     ############################################################################
