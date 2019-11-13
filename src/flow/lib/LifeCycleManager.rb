@@ -59,6 +59,18 @@ class ServiceLCM
     ############################################################################
     def deploy_action(service_id)
         @srv_pool.get(service_id) do |service|
+            if service.state == Service::STATE['PENDING']
+                rc = service.deploy_networks
+
+                if OpenNebula.is_error?(rc)
+                    Log.error LOG_COMP, rc.message
+                    service.set_state(Service::STATE['FAILED_DEPLOYING'])
+                    service.update
+
+                    break
+                end
+            end
+
             set_deploy_strategy(service)
 
             roles = service.roles_deploy
@@ -177,7 +189,13 @@ class ServiceLCM
             service.roles[role_name].set_state(Role::STATE['DONE'])
 
             if service.all_roles_done?
-                delete_networks(service)
+                rc = service.delete_networks
+
+                if !rc.empty?
+                    Log.info LOG_COMP, 'Error trying to delete '\
+                                      "Virtual Networks #{rc}"
+                end
+
                 service.set_state(Service::STATE['DONE'])
             elsif service.strategy == 'straight'
                 @am.trigger_action(:undeploy, service.id, service_id)
@@ -200,6 +218,8 @@ class ServiceLCM
     # Helpers
     ############################################################################
 
+    private
+
     # Returns the deployment strategy for the given Service
     # @param [Service] service the service
     # rubocop:disable Naming/AccessorMethodName
@@ -210,25 +230,6 @@ class ServiceLCM
             service.extend(Straight)
         else
             service.extend(Strategy)
-        end
-    end
-
-    # Deletes the vnets created for the service
-    def delete_networks(service)
-        vnets = JSON.parse(service['TEMPLATE/BODY'])['networks_values']
-
-        vnets.each do |vnet|
-            next unless vnet[vnet.keys[0]].key?('template_id') ||
-                        vnet[vnet.keys[0]].key?('reserve_from')
-
-            vnet_id = vnet[vnet.keys[0]]['id'].to_i
-
-            rc = OpenNebula::VirtualNetwork
-                 .new_with_id(vnet_id, @cloud_auth.client).delete
-
-            if OpenNebula.is_error?(rc)
-                Log.info LOG_COMP, "Error deleting vnet #{vnet_id}: #{rc}"
-            end
         end
     end
 

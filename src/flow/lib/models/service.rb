@@ -477,6 +477,51 @@ module OpenNebula
             super(template_raw, append)
         end
 
+        def deploy_networks
+            @body['networks_values'].each do |net|
+                rc = create_vnet(net) if net[net.keys[0]].key?('template_id')
+
+                if OpenNebula.is_error?(rc)
+                    return rc
+                end
+
+                rc = reserve(net) if net[net.keys[0]].key?('reserve_from')
+
+                if OpenNebula.is_error?(rc)
+                    return rc
+                end
+            end
+
+            # Replace $attibute by the corresponding value
+            resolve_attributes(@body)
+
+            # @body = template.to_hash
+
+            update
+            info
+        end
+
+        def delete_networks
+            vnets = @body['networks_values']
+            vnets_failed = []
+
+            vnets.each do |vnet|
+                next unless vnet[vnet.keys[0]].key?('template_id') ||
+                            vnet[vnet.keys[0]].key?('reserve_from')
+
+                vnet_id = vnet[vnet.keys[0]]['id'].to_i
+
+                rc = OpenNebula::VirtualNetwork
+                     .new_with_id(vnet_id, @client).delete
+
+                if OpenNebula.is_error?(rc)
+                    vnets_failed << vnet_id
+                end
+            end
+
+            vnets_failed
+        end
+
         private
 
         # Maximum number of log entries per service
@@ -497,6 +542,81 @@ module OpenNebula
 
             # Truncate the number of log entries
             @body['log'] = @body['log'].last(MAX_LOG)
+        end
+
+        def create_vnet(net)
+            extra = ''
+
+            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
+
+            vntmpl_id = OpenNebula::VNTemplate
+                        .new_with_id(net[net.keys[0]]['template_id']
+                        .to_i, @client).instantiate(get_vnet_name(net), extra)
+
+            # TODO, check which error should be returned
+            return vntmpl_id if OpenNebula.is_error?(vntmpl_id)
+
+            net[net.keys[0]]['id'] = vntmpl_id
+
+            true
+        end
+
+        def reserve(net)
+            get_vnet_name(net)
+            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
+
+            return false if extra.empty?
+
+            extra.concat("\nNAME=\"#{get_vnet_name(net)}\"\n")
+
+            reserve_id = OpenNebula::VirtualNetwork
+                         .new_with_id(net[net.keys[0]]['reserve_from']
+                         .to_i, @client).reserve_with_extra(extra)
+
+            return reserve_id if OpenNebula.is_error?(reserve_id)
+
+            net[net.keys[0]]['id'] = reserve_id
+
+            true
+        end
+
+        def get_vnet_name(net)
+            "#{net.keys[0]}-#{id}"
+        end
+
+        def resolve_attributes(template)
+            template['roles'].each do |role|
+                if role['vm_template_contents']
+                    # $CUSTOM1_VAR Any word character (letter, number, underscore)
+                    role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
+                        # Check if $ var value is in custom_attrs_values
+                        if template['custom_attrs_values'].key?(key[0])
+                            role['vm_template_contents'].gsub!(
+                                '$'+key[0],
+                                template['custom_attrs_values'][key[0]])
+                            next
+                        end
+
+                        # Check if $ var value is in networks
+                        net = template['networks_values']
+                              .find {|att| att.key? key[0] }
+
+                        next if net.nil?
+
+                        role['vm_template_contents'].gsub!(
+                            '$'+key[0],
+                            net[net.keys[0]]['id'].to_s
+                        )
+                    end
+                end
+
+                next unless role['user_inputs_values']
+
+                role['vm_template_contents'] ||= ''
+                role['user_inputs_values'].each do |key, value|
+                    role['vm_template_contents'] += "\n#{key}=\"#{value}\""
+                end
+            end
         end
 
     end

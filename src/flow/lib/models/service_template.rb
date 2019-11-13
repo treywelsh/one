@@ -261,58 +261,10 @@ module OpenNebula
                 rc = service.allocate(instantiate_template_json)
             else
                 begin
-                    instantiate_template = JSON.parse(@body.to_json).merge(merge_template)
+                    instantiate_template = JSON.parse(@body.to_json)
+                                               .merge(merge_template)
 
                     ServiceTemplate.validate(instantiate_template)
-
-                    # Create networks (reserve or vntemplate) if needed
-                    instantiate_template['networks_values'].each do |net|
-                        rc = create_vnet(net) if net[net.keys[0]].key?('template_id')
-
-                        if OpenNebula.is_error?(rc)
-                            return rc
-                        end
-
-                        rc = reserve(net) if net[net.keys[0]].key?('reserve_from')
-
-                        if OpenNebula.is_error?(rc)
-                            return rc
-                        end
-                    end
-
-                    # replace $attributes
-                    instantiate_template['roles'].each do |role|
-                        if role['vm_template_contents']
-                            # $CUSTOM1_VAR Any word character (letter, number, underscore)
-                            role['vm_template_contents'].scan(/\$(\w+)/).each do |key|
-                                # Check if $ var value is in custom_attrs_values
-                                if instantiate_template['custom_attrs_values'].has_key?(key[0])
-                                    role['vm_template_contents'].gsub!(
-                                        '$'+key[0],
-                                        instantiate_template['custom_attrs_values'][key[0]])
-                                    next
-                                end
-
-                                # Check if $ var value is in networks
-                                net = instantiate_template['networks_values']
-                                      .find {|att| att.key? key[0] }
-
-                                next if net.nil?
-
-                                role['vm_template_contents'].gsub!(
-                                    '$'+key[0],
-                                    net[net.keys[0]]['id'].to_s
-                                )
-                            end
-                        end
-
-                        next unless role['user_inputs_values']
-
-                        role['vm_template_contents'] ||= ''
-                        role['user_inputs_values'].each do |key, value|
-                            role['vm_template_contents'] += "\n#{key}=\"#{value}\""
-                        end
-                    end
 
                     service = OpenNebula::Service
                               .new(OpenNebula::Service.build_xml, @client)
@@ -332,48 +284,6 @@ module OpenNebula
             service.info
 
             service
-        end
-
-        private
-
-        def create_vnet(net)
-            extra = ''
-
-            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
-
-            if !@@vn_name_template.nil?
-                vnet_name = @@vn_name_template
-                            .gsub('$SERVICE_ID',   id.to_s)
-                            .gsub('$SERVICE_NAME', name.to_s)
-                            .gsub('$ROLE_NAME',    net.keys[0])
-            end
-
-            vntmpl_id = OpenNebula::VNTemplate
-                        .new_with_id(net[net.keys[0]]['template_id']
-                        .to_i, @client).instantiate(vnet_name, extra)
-
-            # TODO, check which error should be returned
-            return vntmpl_id if OpenNebula.is_error?(vntmpl_id)
-
-            net[net.keys[0]]['id'] = vntmpl_id
-
-            true
-        end
-
-        def reserve(net)
-            extra = net[net.keys[0]]['extra'] if net[net.keys[0]].key? 'extra'
-
-            return false if extra.empty?
-
-            reserve_id = OpenNebula::VirtualNetwork
-                         .new_with_id(net[net.keys[0]]['reserve_from']
-                         .to_i, @client).reserve_with_extra(extra)
-
-            return reserve_id if OpenNebula.is_error?(reserve_id)
-
-            net[net.keys[0]]['id'] = reserve_id
-
-            true
         end
 
         def self.validate_values(template)
