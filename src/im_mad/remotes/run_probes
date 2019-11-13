@@ -23,14 +23,16 @@ source $(dirname $0)/../scripts_common.sh
 export LANG=C
 
 HYPERVISOR_DIR=$1.d
-ARGUMENTS=$*
+
+ARGUMENTS=$(echo $* | cut -d ' ' -f -$(($#-1)))
+dir=$(echo $ARGUMENTS | cut -d ' ' -f $#)
 
 SCRIPTS_DIR=`dirname $0`
 cd $SCRIPTS_DIR
 
 function run_dir {
     (
-    cd $1
+    cd $1/$dir
     for i in `ls * | grep -E -v '\.(rpmnew|rpmsave|dpkg-\w+)$'`;do
         if [ -x "$i" ]; then
             ./$i $ARGUMENTS
