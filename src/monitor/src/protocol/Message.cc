@@ -24,11 +24,13 @@
 
 template<>
 const EString<MonitorDriverMessages> Message<MonitorDriverMessages>::_type_str({
+    {"UNDEFINED", MonitorDriverMessages::UNDEFINED},
+    {"INIT", MonitorDriverMessages::INIT},
+    {"FINALIZE", MonitorDriverMessages::FINALIZE},
     {"MONITOR_VM", MonitorDriverMessages::MONITOR_VM},
     {"MONITOR_HOST", MonitorDriverMessages::MONITOR_HOST},
     {"SYSTEM_HOST", MonitorDriverMessages::SYSTEM_HOST},
-    {"STATE_VM", MonitorDriverMessages::STATE_VM},
-    {"UNDEFINED", MonitorDriverMessages::UNDEFINED}
+    {"STATE_VM", MonitorDriverMessages::STATE_VM}
 });
 
 template<>

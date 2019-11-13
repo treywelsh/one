@@ -25,11 +25,13 @@
  */
 enum class MonitorDriverMessages : unsigned short int
 {
-    MONITOR_VM   = 0,
-    MONITOR_HOST = 1,
-    SYSTEM_HOST  = 2,
-    STATE_VM     = 3,
-    UNDEFINED    = 4
+    UNDEFINED    = 0,
+    INIT         = 1,
+    FINALIZE     = 2,
+    MONITOR_VM   = 3,
+    MONITOR_HOST = 4,
+    SYSTEM_HOST  = 5,
+    STATE_VM     = 6,
 };
 
 typedef Driver<MonitorDriverMessages> driver_t;

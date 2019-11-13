@@ -19,6 +19,7 @@
 #include "NebulaLog.h"
 #include "Client.h"
 #include "StreamManager.h"
+#include "MonitorDriver.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -221,11 +222,30 @@ void Monitor::thread_execute()
 
     // Maybe it's not necessery to have two threads (Monitor::thread_execute
     // and OnedStream::run), we will see later
-    OnedStream oned_reader(0);
+    one_stream_t oned_reader(0, [](std::unique_ptr<Message<OpenNebulaMessages>> ms) {
+        NebulaLog::log("MON", Log::WARNING, "Received undefined message: " + ms->payload());
+    });
+
     using namespace std::placeholders; // for _1
-    oned_reader.register_action(OnedMessages::ADD_HOST, std::bind(&Monitor::process_add_host, this, _1));
-    oned_reader.register_action(OnedMessages::DEL_HOST, std::bind(&Monitor::process_del_host, this, _1));
-    auto oned_msg_thread = std::thread(&OnedStream::run, &oned_reader);
+    oned_reader.register_action(OpenNebulaMessages::ADD_HOST, std::bind(&Monitor::process_add_host, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::DEL_HOST, std::bind(&Monitor::process_del_host, this, _1));
+    auto oned_msg_thread = std::thread(&one_stream_t::action_loop, &oned_reader, false);
+    oned_msg_thread.detach();
+
+    // todo This initialization should be moved out of the thread, to the initialization phase
+    //      read drivers from config
+    driver_t driver("../test/mock_driver", "2");    // note mock_driver is not in the repository
+    driver.register_action(MonitorDriverMessages::MONITOR_VM, std::bind(&Monitor::process_monitor_vm, this, _1));
+    driver.register_action(MonitorDriverMessages::MONITOR_HOST, std::bind(&Monitor::process_monitor_host, this, _1));
+    driver.register_action(MonitorDriverMessages::SYSTEM_HOST, std::bind(&Monitor::process_system_host, this, _1));
+    driver.register_action(MonitorDriverMessages::STATE_VM, std::bind(&Monitor::process_state_vm, this, _1));
+    std::string error;
+    if (driver.start(false, error) < 0)
+    {
+        NebulaLog::log("MON", Log::ERROR, "Unable to start monigor driver: " + error);
+        kill(0, SIGTERM);
+        return;
+    }
 
     while (!terminate)
     {
@@ -247,14 +267,13 @@ void Monitor::thread_execute()
         sleep(5);
     }
 
-    oned_reader.stop();
-    oned_msg_thread.join();
+    driver.stop();
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void Monitor::process_add_host(std::unique_ptr<OnedMessage> msg)
+void Monitor::process_add_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
     // todo Thread safety, lock here or inside pools?
     hpool->add_object(msg->payload());
@@ -263,7 +282,7 @@ void Monitor::process_add_host(std::unique_ptr<OnedMessage> msg)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void Monitor::process_del_host(std::unique_ptr<OnedMessage> msg)
+void Monitor::process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
     HostBase host(msg->payload());
 
@@ -272,3 +291,40 @@ void Monitor::process_del_host(std::unique_ptr<OnedMessage> msg)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received MONITOR_VM msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received MONITOR_HOST msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received SYSTEM_HOST msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received STATE_VM msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
+}

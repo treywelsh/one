@@ -21,7 +21,8 @@
 
 #include "HostRemotePool.h"
 #include "VMRemotePool.h"
-#include "Message.h"
+#include "OpenNebulaStream.h"
+#include "MonitorDriver.h"
 
 class Monitor
 {
@@ -31,8 +32,16 @@ public:
     void thread_execute();
 
 protected:
-    void process_add_host(std::unique_ptr<OnedMessage> msg);
-    void process_del_host(std::unique_ptr<OnedMessage> msg);
+    // Oned message handlers
+    void process_add_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    void process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+
+    // Monitor driver message handlers
+    void process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    void process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    void process_system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    void process_state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    void process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
     std::unique_ptr<std::thread>       monitor_thread;
