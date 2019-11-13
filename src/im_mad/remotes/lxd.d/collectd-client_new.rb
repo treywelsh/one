@@ -47,7 +47,7 @@ class CollectdClient
     end
 
     # Runs the specifed probes and sends the data
-    def monitor(_probes, push_period)
+    def monitor(probes, push_period)
         before = Time.now
 
         exit 0 if stop?
@@ -145,9 +145,9 @@ retries      = ARGV[4]
 client = CollectdClient.new(host, port, hypervisor, ds_location, retries)
 
 threads = []
-threads << Thread.new { client.monitor_host_system }
-threads << Thread.new { client.monitor_host_info }
-threads << Thread.new { client.monitor_vms_status }
-threads << Thread.new { client.monitor_vms_info }
+threads << Thread.new { client.monitor('host/system', push_periods[0]) }
+threads << Thread.new { client.monitor('host/monitor', push_periods[1]) }
+threads << Thread.new { client.monitor('vms/status', push_periods[2]) }
+threads << Thread.new { client.monitor('vms/monitor', push_periods[3]) }
 
 threads.each {|thr| thr.join }
