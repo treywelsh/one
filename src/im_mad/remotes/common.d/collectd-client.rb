@@ -21,33 +21,78 @@ require 'base64'
 require 'resolv'
 require 'ipaddr'
 require 'zlib'
+require 'probe-manager'
 
 DIRNAME = File.dirname(__FILE__)
-REMOTE_DIR_UPDATE = File.join(DIRNAME, '../../.update')
 
 class CollectdClient
 
-    def initialize(hypervisor, number, host, port, probes_args,
-                   monitor_push_period)
-        # Arguments
-        @hypervisor          = hypervisor
-        @number              = number.to_i
-        @host                = get_ipv4_address(host)
-        @port                = port
-        @monitor_push_period = monitor_push_period
+    def initialize(host, port, hypervisor, ds_location, retries)
+        @socket = open_socket(host, port)
 
-        # Probes
-        run_probes_cmd = File.join(DIRNAME, '..', 'run_probes')
-        @run_probes_cmd = "#{run_probes_cmd} #{@hypervisor}-probes #{probes_args}"
+        probe_info(port, hypervisor, ds_location, retries)
 
-        # Get last update
-        @last_update = get_last_update
-
-        # Socket
-        @s = UDPSocket.new
+        @last_update = last_update
     end
 
-    def get_ipv4_address(host)
+    def send(data)
+        message, code = data
+        code ? result = 'SUCCESS' : result = 'FAILURE'
+        @socket.send("MONITOR #{result} #{@retries} #{message}\n", 0)
+    end
+
+    # TODO: Send if != DB info
+    def optsend(data)
+        send(data)
+    end
+
+    # Runs the specifed probes and sends the data
+    def monitor(probes, push_period)
+        before = Time.now
+
+        exit 0 if stop?
+
+        data = run_probes(probes, push_period)
+        client.send data unless db_match(data)
+
+        # Sleep during the Cycle
+        happened = (Time.now - before).to_i
+        sleep_time = push_period - happened
+        sleep sleep_time if sleep_time < 0
+    end
+
+    private
+
+    def probe_info(port, hypervisor, ds_location, retries)
+        @port           = port
+        @hypervisor     = hypervisor
+        @ds_location    = ds_location
+        @retries        = retries
+
+        @run_probes_cmd = File.join(DIRNAME, '..', 'run_probes')
+    end
+
+    def probe_cmd(dir, push_period)
+        `#{@run_probes_cmd} #{@hypervisor}-probes #{@ds_location} #{@port} #{push_period} #{@retries} #{dir} 2>&1`
+    end
+
+    def run_probes(dir, push_period)
+        data   = probe_cmd(dir, push_period)
+        code   = $CHILD_STATUS.exitstatus == 0
+
+        zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
+        data64 = Base64.encode64(zdata).strip.delete("\n")
+
+        [data64, code]
+    end
+
+    # TODO: Compare with DB before send
+    # Returns true if data matches local DB info
+    def db_match(_data)
+        false
+    end
+
+    def ipv4_address(host)
         addresses = Resolv.getaddresses(host)
         address = nil
 
@@ -65,82 +110,44 @@ class CollectdClient
         address
     end
 
-    # TODO: Run probe per probe_directory
-    def run_probes
-        data   = `#{@run_probes_cmd} 2>&1`
-        code   = $CHILD_STATUS.exitstatus == 0
-
-        zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
-        data64 = Base64.encode64(zdata).strip.delete("\n")
-
-        [data64, code]
+    # TODO: Encript socket
+    def open_socket(host, port)
+        ip = ipv4_address(host)
+        @socket = UDPSocket.new
+        @socket.bind(ip, port)
     end
 
-    def send(data)
-        message, code = data
-        code ? result = 'SUCCESS' : result = 'FAILURE'
-        @s.send("MONITOR #{result} #{@number} #{message}\n", 0, @host, @port)
-    end
-
-    def monitor
-        loop do
-            # Stop the execution if we receive the update signal
-            exit 0 if stop?
-
-            # Collect the Data
-            ts = Time.now
-
-            # Send signal to itself to run probes and send the data
-            Process.kill('HUP', $PROCESS_ID)
-
-            run_probes_time = (Time.now - ts).to_i
-
-            # Sleep during the Cycle
-            sleep_time = @monitor_push_period - run_probes_time
-            sleep_time = 0 if sleep_time < 0
-            sleep sleep_time
-        end
-    end
-
-    def get_last_update
+    def last_update
         File.stat(REMOTE_DIR_UPDATE).mtime.to_i rescue 0
     end
 
     def stop?
-        get_last_update.to_i != @last_update.to_i
+        last_update.to_i != @last_update.to_i
     end
 
 end
 
-hypervisor          = ARGV[0]
-# ds_location         = ARGV[1]
-port                = ARGV[2]
-monitor_push_period = ARGV[3]
-number              = ARGV[4]
+#######################
+# Argument processing #
+#######################
 
-monitor_push_period = monitor_push_period.split('-').first.to_i
+host         = ENV['SSH_CLIENT'].split.first
+port         = ARGV[2]
+hypervisor   = ARGV[0]
+ds_location  = ARGV[1]
+push_periods = ARGV[3]
+retries      = ARGV[4]
 
-host = ENV['SSH_CLIENT'].split.first
-probes_args = ARGV[1..-1].join(' ')
+#############################
+# Start push monitorization #
+#############################
 
-# Add a random sleep before the first send
-sleep rand monitor_push_period
+client = CollectdClient.new(host, port, hypervisor, ds_location, retries)
 
-# Start push monitorization
-client = CollectdClient.new(hypervisor, number, host, port, probes_args,
-                            monitor_push_period)
+threads = []
+threads << Thread.new { client.monitor('host/system', push_periods[0]) }
+threads << Thread.new { client.monitor('host/monitor', push_periods[1]) }
+threads << Thread.new { client.monitor('vms/status', push_periods[2]) }
+threads << Thread.new { client.monitor('vms/monitor', push_periods[3]) }
 
-Signal.trap('HUP') do
-    # ignore another HUP until we handle this one
-    this_handler = Signal.trap('HUP', 'IGNORE')
-
-    data = client.run_probes
-
-    # TODO: Save data to DB
-    client.send data # TODO: Compare with DB before send
-
-    # set the handler back
-    Signal.trap('HUP', this_handler)
-end
-
-client.monitor
+threads.each {|thr| thr.join }
