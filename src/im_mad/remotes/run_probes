@@ -22,20 +22,18 @@ source $(dirname $0)/../scripts_common.sh
 
 export LANG=C
 
-HYPERVISOR_DIR=$1.d
-
-ARGUMENTS=$(echo $* | cut -d ' ' -f -$(($#-1)))
-dir=$(echo $ARGUMENTS | cut -d ' ' -f $#)
+PROBE_DIR=$1
+STDIN=$2
 
 SCRIPTS_DIR=`dirname $0`
 cd $SCRIPTS_DIR
 
 function run_dir {
     (
-    cd $1/$dir
+    cd $1
     for i in `ls * | grep -E -v '\.(rpmnew|rpmsave|dpkg-\w+)$'`;do
         if [ -x "$i" ]; then
-            ./$i $ARGUMENTS
+            echo $STDIN | ./$i # TODO: Update probes to parse YAML from stdin
             EXIT_CODE=$?
             if [ "x$EXIT_CODE" != "x0" ]; then
                 error_message "Error executing $i"
@@ -47,8 +45,8 @@ function run_dir {
 }
 
 data=$(
-    if [ -d "$HYPERVISOR_DIR" ]; then
-        run_dir "$HYPERVISOR_DIR"
+    if [ -d "$PROBE_DIR" ]; then
+        run_dir "$PROBE_DIR"
     fi
 )
 

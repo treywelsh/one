@@ -22,6 +22,8 @@ require 'resolv'
 require 'ipaddr'
 require 'zlib'
 require 'probe-manager'
+require 'yaml'
+require 'open3'
 
 DIRNAME = File.dirname(__FILE__)
 
@@ -69,16 +71,26 @@ class CollectdClient
         @ds_location    = ds_location
         @retries        = retries
 
+        @yaml_hash = {
+            :port           => @port,
+            :hypervisor     => @hypervisor,
+            :ds_location    => @ds_location,
+            :retries        => @retries
+        }
+
         @run_probes_cmd = File.join(DIRNAME, '..', 'run_probes')
+        @run_probes_cmd = "#{@run_probes_cmd} #{@hypervisor}-probes.d"
     end
 
     def probe_cmd(dir, push_period)
-        `#{@run_probes_cmd} #{@hypervisor}-probes #{@ds_location} #{@port} #{push_period} #{@retries} #{dir} 2>&1`
+        stdin = @yaml_hash.merge(:push_period => push_period).to_yaml
+        cmd = "#{@run_probes_cmd}/#{dir} #{stdin}"
+
+        Open3.capture2e(cmd)
     end
 
     def run_probes(dir, push_period)
-        data   = probe_cmd(dir, push_period)
-        code   = $CHILD_STATUS.exitstatus == 0
+        data, code = probe_cmd(dir, push_period)
 
         zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
         data64 = Base64.encode64(zdata).strip.delete("\n")
