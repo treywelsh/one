@@ -149,5 +149,9 @@ threads << Thread.new { client.monitor('host/system', push_periods[0]) }
 threads << Thread.new { client.monitor('host/monitor', push_periods[1]) }
 threads << Thread.new { client.monitor('vms/status', push_periods[2]) }
 threads << Thread.new { client.monitor('vms/monitor', push_periods[3]) }
+threads << Thread.new do
+    sleep push_periods[0]
+    `bash #{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd`
+end
 
 threads.each {|thr| thr.join }
