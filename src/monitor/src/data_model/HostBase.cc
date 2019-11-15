@@ -45,8 +45,29 @@ int HostBase::from_xml(const std::string &xml_str)
 
 string HostBase::to_xml() const
 {
-    // todo
-    return "";
+    string template_xml;
+    string vm_collection_xml;
+    string share_xml;
+
+    ostringstream oss;
+
+    oss <<
+    "<HOST>"
+       "<ID>"            << oid              << "</ID>"              <<
+       "<NAME>"          << name             << "</NAME>"            <<
+       "<STATE>"         << state            << "</STATE>"           <<
+       "<PREV_STATE>"    << prev_state       << "</PREV_STATE>"      <<
+       "<IM_MAD>"        << one_util::escape_xml(im_mad_name)  << "</IM_MAD>" <<
+       "<VM_MAD>"        << one_util::escape_xml(vmm_mad_name) << "</VM_MAD>" <<
+       "<LAST_MON_TIME>" << last_monitored   << "</LAST_MON_TIME>"   <<
+       "<CLUSTER_ID>"    << cluster_id       << "</CLUSTER_ID>"      <<
+       "<CLUSTER>"       << cluster          << "</CLUSTER>"         <<
+       host_share.to_xml(share_xml)  <<
+       vm_ids.to_xml(vm_collection_xml) <<
+       obj_template.to_xml(template_xml) <<
+    "</HOST>";
+
+    return oss.str();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -125,12 +146,25 @@ int HostBase::init_attributes()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+void HostBase::set_vm_ids(const std::set<int>& ids)
+{
+    vm_ids.clear();
+
+    for (auto id : ids)
+    {
+        vm_ids.add(id);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 ostream& operator<<(ostream& o, const HostBase& host)
 {
     o << "ID          : " << host.oid        << endl;
     o << "CLUSTER_ID  : " << host.cluster_id << endl;
     o << "PUBLIC      : " << host.public_cloud << endl;
-    // o << host.share; // todo
+    o << host.host_share;
 
     return o;
 }

@@ -97,10 +97,20 @@ public:
         return vm_ids.get_collection();
     }
 
+    void set_vm_ids(const std::set<int>& ids);
+
     bool is_public_cloud() const
     {
         return public_cloud;
     }
+
+    time_t get_last_monitored() const { return last_monitored; }
+
+    void set_last_monitored(time_t lm) { last_monitored = lm; }
+
+    const HostShare& get_host_share() const { return host_share; }
+
+    void set_host_share(const HostShare& hs) { host_share = hs; }
 
     /**
      *  Prints the Host information to an output stream. This function is used

@@ -52,6 +52,8 @@ private:
     std::unique_ptr<HostRemotePool>    hpool;
     std::unique_ptr<VMRemotePool>      vmpool;
 
+    std::unique_ptr<SqlDB>             sqlDB;
+
     bool terminate = false;
 };
 

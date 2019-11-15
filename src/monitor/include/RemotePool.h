@@ -20,6 +20,7 @@
 
 #include "Client.h"
 #include "BaseObject.h"
+#include "SqlDB.h"
 
 #include <memory>
 
@@ -82,8 +83,9 @@ public:
 
 protected:
     // ------------------------------------------------------------------------
-    RemotePool()
+    explicit RemotePool(SqlDB* _db)
     : client(Client::client())
+    , db(_db)
     {
     }
 
@@ -145,6 +147,11 @@ protected:
      * Hash map contains the suitable [id, object] pairs.
      */
     map<int, std::unique_ptr<BaseObject>> objects;
+
+    /**
+     * DB to store monitoring information
+     */
+    SqlDB* db;
 };
 
 #endif // REMOTE_POOL_H_

@@ -15,6 +15,10 @@
 /* -------------------------------------------------------------------------- */
 
 #include "HostRemotePool.h"
+#include "NebulaLog.h"
+
+const char * monit_table = "host_monitoring";
+const char * monit_db_names = "hid, last_mon_time, body";
 
 int HostRemotePool::load_info(xmlrpc_c::value &result)
 {
@@ -37,3 +41,33 @@ int HostRemotePool::load_info(xmlrpc_c::value &result)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+int HostRemotePool::update_monitoring(HostBase* h)
+{
+    auto sql_xml = db->escape_str(h->to_xml());
+
+    if (sql_xml == 0)
+    {
+        NebulaLog::log("HPL", Log::WARNING, "Could not transform Host to XML");
+        return -1;
+    }
+
+    if (ObjectXML::validate_xml(sql_xml) != 0)
+    {
+        NebulaLog::log("HPL", Log::WARNING, "Could not transform Host to XML" + string(sql_xml));
+        db->free_str(sql_xml);
+        return -1;
+    }
+
+    ostringstream oss;
+    oss << "REPLACE INTO " << monit_table << " ("<< monit_db_names <<") VALUES ("
+        <<          h->get_id()             << ","
+        <<          h->get_last_monitored() << ","
+        << "'" <<   sql_xml                 << "')";
+
+    db->free_str(sql_xml);
+
+    auto rc = db->exec_local_wr(oss);
+
+    return rc;
+}

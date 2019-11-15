@@ -20,6 +20,8 @@
 #include "Client.h"
 #include "StreamManager.h"
 #include "MonitorDriver.h"
+#include "SqliteDB.h"
+#include "MySqlDB.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -32,18 +34,27 @@ void Monitor::start()
     // System directories
     string log_file;
     string etc_path;
+    string var_location;
 
-    const char *nl = getenv("ONE_LOCATION");
+    const char* nebula_location = getenv("ONE_LOCATION");
 
-    if (nl == 0) // OpenNebula installed under root directory
+    if (nebula_location == nullptr) // OpenNebula installed under root directory
     {
-        log_file = "/var/log/one/monitor.log";
-        etc_path = "/etc/one/";
+        log_file     = "/var/log/one/monitor.log";
+        etc_path     = "/etc/one/";
+        var_location = "/var/lib/one/";
     }
     else
     {
-        log_file = string(nl) + "/var/monitor.log";
-        etc_path = string(nl) + "/etc/";
+        string nl = nebula_location;
+        if (nl[nl.size() - 1] != '/')
+        {
+            nl += "/";
+        }
+
+        log_file     = nl + "var/monitor.log";
+        etc_path     = nl + "etc/";
+        var_location = nl + "var/";
     }
 
     // Configuration File
@@ -52,7 +63,6 @@ void Monitor::start()
     {
         throw runtime_error("Error reading configuration file.");
     }
-    // todo load configuration values
 
     // Log system
     NebulaLog::LogType log_system = NebulaLog::STD;
@@ -127,14 +137,48 @@ void Monitor::start()
 
     xmlInitParser();
 
+    // -----------------------------------------------------------
+    // Database
+    // -----------------------------------------------------------
+    string db_backend_type = "sqlite";
+    string server;
+    int    port;
+    string user;
+    string passwd;
+    string db_name;
+    int    connections;
+
+    const VectorAttribute * _db = conf.get("DB");
+
+    if (_db != 0)
+    {
+        db_backend_type = _db->vector_value("BACKEND");
+
+        _db->vector_value<string>("SERVER", server, "localhost");
+        _db->vector_value("PORT", port, 0);
+        _db->vector_value<string>("USER", user, "oneadmin");
+        _db->vector_value<string>("PASSWD", passwd, "oneadmin");
+        _db->vector_value<string>("DB_NAME", db_name, "opennebula");
+        _db->vector_value("CONNECTIONS", connections, 50);
+    }
+
+    if (db_backend_type == "sqlite")
+    {
+        sqlDB.reset(new SqliteDB(var_location + "one.db"));
+    }
+    else
+    {
+        sqlDB.reset(new MySqlDB(server, port, user, passwd, db_name, connections));
+    }
+
     // -------------------------------------------------------------------------
     // Pools
     // -------------------------------------------------------------------------
     // int machines_limit = 100;
     // conf.get("MAX_VM", machines_limit);
 
-    hpool.reset(new HostRemotePool());
-    vmpool.reset(new VMRemotePool());
+    hpool.reset(new HostRemotePool(sqlDB.get()));
+    vmpool.reset(new VMRemotePool(sqlDB.get()));
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them
@@ -303,6 +347,21 @@ void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>>
 void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
     NebulaLog::log("MON", Log::INFO, "Received MONITOR_HOST msg: " + msg->payload());
+    HostBase hm(msg->payload());
+
+    auto host = hpool->get(hm.get_id());
+    if (host == nullptr)
+    {
+        NebulaLog::log("MON", Log::WARNING,
+            "Monitoring received, host does not exists, id = " + std::to_string(hm.get_id()));
+        return;
+    }
+
+    host->set_last_monitored(hm.get_last_monitored());
+    host->set_host_share(hm.get_host_share());
+    host->set_vm_ids(hm.get_vm_ids());
+
+    hpool->update_monitoring(host);
 }
 
 /* -------------------------------------------------------------------------- */

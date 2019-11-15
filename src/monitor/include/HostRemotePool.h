@@ -25,8 +25,8 @@
 class HostRemotePool : public RemotePool
 {
 public:
-    HostRemotePool()
-    : RemotePool()
+    explicit HostRemotePool(SqlDB* db)
+    : RemotePool(db)
     {}
 
     HostBase* get(int oid) const
@@ -39,6 +39,11 @@ public:
         // todo Handle error state, when the object can't be constructed from xml
         RemotePool::add_object(std::unique_ptr<HostBase>(new HostBase(xml_string)));
     }
+
+    /**
+     *  Write monitoring data to DB
+     */
+    int update_monitoring(HostBase* h);
 
 protected:
     int load_info(xmlrpc_c::value &result) override;

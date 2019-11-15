@@ -25,8 +25,8 @@
 class VMRemotePool : public RemotePool
 {
 public:
-    VMRemotePool()
-    : RemotePool()
+    explicit VMRemotePool(SqlDB* db)
+    : RemotePool(db)
     {}
 
     VirtualMachineBase* get(int oid) const
