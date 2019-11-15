@@ -51,47 +51,52 @@ module OpenNebula
             service_id = service_id.to_i if service_id
             service = Service.new_with_id(service_id, @client)
 
-            rc = service.info
+            if block_given?
+                obj_mutex = nil
+                entry     = nil
 
-            if OpenNebula.is_error?(rc)
-                return rc
-            else
-                if block_given?
-                    obj_mutex = nil
-                    entry     = nil
+                @@mutex.synchronize do
+                    # entry is an array of [Mutex, waiting]
+                    # waiting is the number of threads waiting on this mutex
+                    entry = @@mutex_hash[service_id]
 
-                    @@mutex.synchronize {
-                        # entry is an array of [Mutex, waiting]
-                        # waiting is the number of threads waiting on this mutex
-                        entry = @@mutex_hash[service_id]
+                    if entry.nil?
+                        entry = [Mutex.new, 0]
+                        @@mutex_hash[service_id] = entry
+                    end
 
-                        if entry.nil?
-                            entry = [Mutex.new, 0]
-                            @@mutex_hash[service_id] = entry
+                    obj_mutex = entry[0]
+                    entry[1]  = entry[1] + 1
+
+                    if @@mutex_hash.size > 10000
+                        @@mutex_hash.delete_if do |_s_id, entry_loop|
+                            entry_loop[1] == 0
                         end
-
-                        obj_mutex = entry[0]
-                        entry[1]  = entry[1] + 1
-
-                        if @@mutex_hash.size > 10000
-                            @@mutex_hash.delete_if { |s_id, entry|
-                                entry[1] == 0
-                            }
-                        end
-                    }
-
-                    obj_mutex.synchronize {
-                        block.call(service)
-                    }
-
-                    @@mutex.synchronize {
-                        entry[1] = entry[1] - 1
-                    }
+                    end
                 end
 
-                return service
+                rc = obj_mutex.synchronize do
+                    rc = service.info
+
+                    if OpenNebula.is_error?(rc)
+                        return rc
+                    end
+
+                    block.call(service)
+                end
+
+                @@mutex.synchronize do
+                    entry[1] = entry[1] - 1
+                end
+
+                if OpenNebula.is_error?(rc)
+                    return rc
+                end
             end
+
+            service
         end
 
     end
+
 end
