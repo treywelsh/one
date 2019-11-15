@@ -100,14 +100,11 @@ public:
 
     HostSharePCI() : Template(false, '=', "PCI_DEVICES"){};
 
+    HostSharePCI(const HostSharePCI& src);
+
     virtual ~HostSharePCI()
     {
-        map<string, PCIDevice *>::iterator it;
-
-        for (it=pci_devices.begin(); it != pci_devices.end(); it++)
-        {
-            delete it->second;
-        };
+        clear();
     };
 
     /**
@@ -146,11 +143,17 @@ public:
      */
     void set_monitorization(vector<VectorAttribute*> &pci_att);
 
+    void clear() override;
+
     /**
      *  Prints the PCI device list to an output stream. This function is used
      *  for logging purposes and *not* for generating DB content.
      */
     friend ostream& operator<<(ostream& o, const HostSharePCI& p);
+
+    HostSharePCI& operator=(const HostSharePCI& other);
+
+    HostSharePCI& operator=(HostSharePCI&& other) noexcept;
 
     /**
      *  Gets a 4 hex digits value from attribute
@@ -188,6 +191,8 @@ private:
     struct PCIDevice
     {
         PCIDevice(VectorAttribute * _attrs);
+
+        PCIDevice(const PCIDevice& src);
 
         ~PCIDevice(){};
 
@@ -508,10 +513,7 @@ public:
 
     virtual ~HostShareNUMA()
     {
-        for (auto it = nodes.begin(); it != nodes.end(); ++it)
-        {
-            delete it->second;
-        }
+        clear();
     };
 
     /**
@@ -590,10 +592,22 @@ public:
      */
     void update_cpu_usage(unsigned int vms_thread);
 
+    void clear()
+    {
+        for (auto& node : nodes)
+        {
+            delete node.second;
+        }
+        nodes.clear();
+    }
     /**
      *  Prints the NUMA nodes to an output stream.
      */
     friend ostream& operator<<(ostream& o, const HostShareNUMA& n);
+
+    HostShareNUMA& operator=(const HostShareNUMA& other);
+
+    HostShareNUMA& operator=(HostShareNUMA&& other) noexcept;
 
 private:
     /**
@@ -744,7 +758,7 @@ public:
     /**
      *  Function to write a HostShare to an output stream
      */
-    friend ostream& operator<<(ostream& os, HostShare& hs);
+    friend ostream& operator<<(ostream& os, const HostShare& hs);
 
     /**
      * Function to print the HostShare object into a string in

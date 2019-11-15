@@ -32,6 +32,18 @@ using namespace std;
 /* HostSharePCI                                                             */
 /* ************************************************************************ */
 
+HostSharePCI::HostSharePCI(const HostSharePCI& src)
+    : Template(src)
+{
+    for (const auto& pci : src.pci_devices)
+    {
+        pci_devices.insert({pci.first, new PCIDevice(*pci.second)});
+    }
+}
+
+/* ------------------------------------------------------------------------*/
+/* ------------------------------------------------------------------------*/
+
 int HostSharePCI::from_xml_node(const xmlNodePtr node)
 {
     int rc = Template::from_xml_node(node);
@@ -46,6 +58,7 @@ int HostSharePCI::from_xml_node(const xmlNodePtr node)
     return 0;
 }
 
+/* ------------------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
 
 void HostSharePCI::init()
@@ -112,7 +125,6 @@ bool HostSharePCI::test(const vector<VectorAttribute *> &devs) const
 
     return true;
 }
-
 
 /* ------------------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
@@ -274,6 +286,20 @@ void HostSharePCI::set_monitorization(vector<VectorAttribute*> &pci_att)
 /* ------------------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
 
+void HostSharePCI::clear()
+{
+    Template::clear();
+
+    for (auto& pci : pci_devices)
+    {
+        delete pci.second;
+    }
+    pci_devices.clear();
+}
+
+/* ------------------------------------------------------------------------*/
+/* ------------------------------------------------------------------------*/
+
 int HostSharePCI::get_pci_value(const char * name,
     const VectorAttribute * pci_device, unsigned int &pci_value)
 {
@@ -382,6 +408,20 @@ HostSharePCI::PCIDevice::PCIDevice(VectorAttribute * _attrs)
 /* ------------------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
 
+HostSharePCI::PCIDevice::PCIDevice(const PCIDevice& src)
+{
+    vendor_id = src.vendor_id;
+    device_id = src.device_id;
+    class_id  = src.class_id;
+    vmid = src.vmid;
+    address = src.address;
+
+    attrs = src.attrs->clone();
+};
+
+/* ------------------------------------------------------------------------*/
+/* ------------------------------------------------------------------------*/
+
 ostream& operator<<(ostream& os, const HostSharePCI& pci)
 {
     os  << right << setw(15)<< "PCI ADDRESS"<< " "
@@ -403,6 +443,38 @@ ostream& operator<<(ostream& os, const HostSharePCI& pci)
     }
 
     return os;
+}
+
+/* ------------------------------------------------------------------------*/
+/* ------------------------------------------------------------------------*/
+
+HostSharePCI& HostSharePCI::operator=(const HostSharePCI& other)
+{
+    if (this != &other) // no-op on self assignment
+    {
+        clear();
+        Template::operator=(other);
+        for (const auto& pci : other.pci_devices)
+        {
+            pci_devices.insert({pci.first, new PCIDevice(*pci.second)});
+        }
+    }
+    return *this;
+}
+
+/* ------------------------------------------------------------------------*/
+/* ------------------------------------------------------------------------*/
+
+HostSharePCI& HostSharePCI::operator=(HostSharePCI&& other) noexcept
+{
+    if (this != &other) // no-op self assignment
+    {
+        clear();
+        Template::operator=(std::move(other));
+
+        pci_devices = std::move(other.pci_devices);
+    }
+    return *this;
 }
 
 /* ************************************************************************** */
@@ -1079,6 +1151,41 @@ ostream& operator<<(ostream& o, const HostShareNUMA& n)
     return o;
 }
 
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
+HostShareNUMA& HostShareNUMA::operator=(const HostShareNUMA& other)
+{
+    if (this != &other) // no-op on self assignment
+    {
+        threads_core = other.threads_core;
+
+        clear();
+        for (auto& node : other.nodes)
+        {
+            nodes.insert({node.first, new HostShareNode(*node.second)});
+        }
+    }
+    return *this;
+}
+
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
+HostShareNUMA& HostShareNUMA::operator=(HostShareNUMA&& other) noexcept
+{
+    if (this != &other) // no-op self assignment
+    {
+        threads_core = other.threads_core;
+        clear();
+        nodes = std::move(other.nodes);
+    }
+    return *this;
+}
+
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
 int HostShareNUMA::from_xml_node(const vector<xmlNodePtr> &ns, unsigned int vt)
 {
     for (auto it = ns.begin() ; it != ns.end(); ++it)
@@ -1744,7 +1851,7 @@ HostShare::HostShare():
         running_vms(0),
         vms_thread(1){};
 
-ostream& operator<<(ostream& os, HostShare& hs)
+ostream& operator<<(ostream& os, const HostShare& hs)
 {
     string str;
 
