@@ -183,7 +183,7 @@ int StreamManager<E>::action_loop(bool threaded)
 
         std::unique_ptr<Message<E>> msg{new Message<E>};
 
-        msg->parse_from(line);
+        msg->parse_from(line, false);
 
         do_action(msg, threaded); //Errors are handled by the UNDEFINED action
     }

@@ -131,7 +131,7 @@ int UDPStream<E>::action_loop(int threads, std::string& error)
 
                 std::unique_ptr<Message<E>> msg{new Message<E>};
 
-                msg->parse_from(line);
+                msg->parse_from(line, false);
 
                 StreamManager<E>::do_action(msg, false);
             }

@@ -16,6 +16,9 @@
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+
 #include <zlib.h>
 
 #include "Message.h"
@@ -218,3 +221,91 @@ int zlib_compress(const std::string& in, std::string& out)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+//TODO read from configuration path
+int rsa_public_encrypt(const std::string& in, std::string& out)
+{
+    static RSA * rsa = nullptr;
+
+    if ( rsa == nullptr) //initialize RSA structure
+    {
+        std::string pubk_path = getenv("HOME");
+        pubk_path += "/.ssh/id_rsa.pub.pem";
+
+        FILE * fp = fopen(pubk_path.c_str(), "r");
+
+        if ( fp == nullptr )
+        {
+            return -1;
+        }
+
+        rsa = PEM_read_RSAPublicKey(fp, &rsa, nullptr, nullptr);
+
+        if ( rsa == nullptr )
+        {
+            return -1;
+        }
+
+        fclose(fp);
+    }
+
+    char * out_c = (char *) malloc(sizeof(char) * RSA_size(rsa));
+
+    int rc = RSA_public_encrypt(in.length(), (const unsigned char *) in.c_str(),
+            (unsigned char *) out_c, rsa, RSA_PKCS1_PADDING);
+
+    if ( rc != -1 )
+    {
+        out.assign(out_c, rc);
+        rc = 0;
+    }
+
+    free(out_c);
+
+    return rc;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int rsa_private_decrypt(const std::string& in, std::string& out)
+{
+    static RSA * rsa = nullptr;
+
+    if ( rsa == nullptr) //initialize RSA structure
+    {
+        std::string pubk_path = getenv("HOME");
+        pubk_path += "/.ssh/id_rsa";
+
+        FILE * fp = fopen(pubk_path.c_str(), "r");
+
+        if ( fp == nullptr )
+        {
+            return -1;
+        }
+
+        rsa = PEM_read_RSAPrivateKey(fp, &rsa, nullptr, nullptr);
+
+        if ( rsa == nullptr )
+        {
+            return -1;
+        }
+
+        fclose(fp);
+    }
+
+    char * out_c = (char *) malloc(sizeof(char) * RSA_size(rsa));
+
+    int rc = RSA_private_decrypt(in.length(), (const unsigned char *)in.c_str(),
+            (unsigned char *) out_c, rsa, RSA_PKCS1_PADDING);
+
+    if ( rc != -1 )
+    {
+        out.assign(out_c, rc);
+        rc = 0;
+    }
+
+    free(out_c);
+
+    return rc;
+}

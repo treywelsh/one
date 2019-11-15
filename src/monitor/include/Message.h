@@ -33,6 +33,10 @@ int zlib_decompress(const std::string& in, std::string& out);
 
 int zlib_compress(const std::string& in, std::string& out);
 
+int rsa_public_encrypt(const std::string& in, std::string& out);
+
+int rsa_private_decrypt(const std::string& in, std::string& out);
+
 /**
  *  This class represents a generic message used by the Monitoring Protocol.
  *  The structure of the message is:
@@ -55,22 +59,22 @@ public:
      *  Parse the Message from an input string
      *    @param input string with the message
      */
-    int parse_from(const std::string& input);
+    int parse_from(const std::string& input, bool decrypt);
 
     /**
      *  Writes this object to the given string
      */
-    int write_to(std::string& out) const;
+    int write_to(std::string& out, bool encrypt) const;
 
     /**
      *  Writes this object to the given file descriptor
      */
-    int write_to(int fd) const;
+    int write_to(int fd, bool encrypt) const;
 
     /**
      *  Writes this object to the given output stream
      */
-    int write_to(std::ostream& oss) const;
+    int write_to(std::ostream& oss, bool encrypt) const;
 
     /**
      *
@@ -118,7 +122,7 @@ private:
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int Message<E>::parse_from(const std::string& input)
+int Message<E>::parse_from(const std::string& input, bool decrypt)
 {
     std::istringstream is(input);
     std::string buffer, payloaz;
@@ -154,6 +158,11 @@ int Message<E>::parse_from(const std::string& input)
         goto error;
     }
 
+    if ( decrypt && rsa_private_decrypt(_payload, _payload) == -1)
+    {
+        goto error;
+    }
+
     return 0;
 
 error:
@@ -166,16 +175,22 @@ error:
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int Message<E>::write_to(std::string& out) const
+int Message<E>::write_to(std::string& out, bool encrypt) const
 {
     out.clear();
 
+    std::string secret;
     std::string payloaz;
     std::string payloaz64;
 
     if (!_payload.empty())
     {
-        if (zlib_compress(_payload, payloaz) == -1)
+        if ( encrypt && rsa_public_encrypt(_payload, secret) )
+        {
+            return -1;
+        }
+
+        if (zlib_compress(secret, payloaz) == -1)
         {
             return -1;
         }
@@ -198,11 +213,11 @@ int Message<E>::write_to(std::string& out) const
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int Message<E>::write_to(int fd) const
+int Message<E>::write_to(int fd, bool encrypt) const
 {
     std::string out;
 
-    if ( write_to(out) == -1)
+    if ( write_to(out, encrypt) == -1)
     {
         return -1;
     }
@@ -216,11 +231,11 @@ int Message<E>::write_to(int fd) const
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int Message<E>::write_to(std::ostream& oss) const
+int Message<E>::write_to(std::ostream& oss, bool encrypt) const
 {
     std::string out;
 
-    if ( write_to(out) == -1)
+    if ( write_to(out, encrypt) == -1)
     {
         return -1;
     }
