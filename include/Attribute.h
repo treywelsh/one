@@ -328,6 +328,23 @@ public:
         return 0;
     }
 
+    /**
+     * Returns the value of the given element of the VectorAttribute.
+     * If element is invalid, returns default value
+     *
+     * @param name of the attribute
+     * @param value always set, if element is invalid set default_value
+     * @param default_value used if element is invalid
+     */
+    template<typename T>
+    void vector_value(const string& name, T& value, const T& default_value) const
+    {
+        if (vector_value(name, value) != 0)
+        {
+            value = default_value;
+        }
+    }
+
     int vector_value(const string& name, string& value) const;
 
     int vector_value(const string& name, bool& value) const;
