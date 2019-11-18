@@ -92,6 +92,8 @@ module OpenNebula
                 if OpenNebula.is_error?(rc)
                     return rc
                 end
+            else
+                service.info
             end
 
             service
