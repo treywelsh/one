@@ -19,8 +19,8 @@
 
 #include <thread>
 
-#include "HostRemotePool.h"
-#include "VMRemotePool.h"
+#include "HostRPCPool.h"
+#include "VMRPCPool.h"
 #include "OpenNebulaStream.h"
 #include "MonitorDriver.h"
 
@@ -44,15 +44,15 @@ protected:
     void process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
-    std::unique_ptr<std::thread>       monitor_thread;
+    std::unique_ptr<std::thread> monitor_thread;
 
     // ---------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------
-    std::unique_ptr<HostRemotePool>    hpool;
-    std::unique_ptr<VMRemotePool>      vmpool;
+    std::unique_ptr<HostRPCPool> hpool;
+    std::unique_ptr<VMRPCPool>   vmpool;
 
-    std::unique_ptr<SqlDB>             sqlDB;
+    std::unique_ptr<SqlDB> sqlDB;
 
     bool terminate = false;
 };

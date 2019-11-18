@@ -13,10 +13,8 @@
 /* See the License for the specific language governing permissions and        */
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
-
-
-#ifndef REMOTE_POOL_H_
-#define REMOTE_POOL_H_
+#ifndef RPC_POOL_H_
+#define RPC_POOL_H_
 
 #include "Client.h"
 #include "BaseObject.h"
@@ -24,7 +22,7 @@
 
 #include <memory>
 
-class RemotePool
+class RPCPool
 {
 public:
     /**
@@ -72,7 +70,7 @@ public:
 
     void add_object(std::unique_ptr<BaseObject> o)
     {
-        objects[o->get_id()] = std::move(o);
+        objects[o->oid()] = std::move(o);
     }
 
     /**
@@ -83,13 +81,13 @@ public:
 
 protected:
     // ------------------------------------------------------------------------
-    explicit RemotePool(SqlDB* _db)
+    explicit RPCPool(SqlDB* _db)
     : client(Client::client())
     , db(_db)
     {
     }
 
-    virtual ~RemotePool() = default;
+    virtual ~RPCPool() = default;
 
     /**
      *  Deletes pool objects and frees resources.
@@ -115,24 +113,22 @@ protected:
      */
     virtual int load_info(xmlrpc_c::value &result) = 0;
 
-
     /**
      *  Inserts object into objects list
      */
     template<typename T>
-    void add_object(xmlNodePtr node)
+    void add_object(const xmlNodePtr node)
     {
         if (node == 0 || node->children == 0)
         {
             NebulaLog::log("POOL", Log::ERROR,
                         "XML Node does not represent a valid object");
-
             return;
         }
 
         auto obj = std::unique_ptr<T>(new T(node));
 
-        objects[obj->get_id()] = std::move(obj);
+        objects[obj->oid()] = std::move(obj);
     }
 
     // ------------------------------------------------------------------------
@@ -141,7 +137,7 @@ protected:
     /**
      * XML-RPC client
      */
-    Client * client;
+    Client* client;
 
     /**
      * Hash map contains the suitable [id, object] pairs.

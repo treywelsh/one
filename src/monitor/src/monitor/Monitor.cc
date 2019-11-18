@@ -177,8 +177,8 @@ void Monitor::start()
     // int machines_limit = 100;
     // conf.get("MAX_VM", machines_limit);
 
-    hpool.reset(new HostRemotePool(sqlDB.get()));
-    vmpool.reset(new VMRemotePool(sqlDB.get()));
+    hpool.reset(new HostRPCPool(sqlDB.get()));
+    vmpool.reset(new VMRPCPool(sqlDB.get()));
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them
@@ -297,7 +297,7 @@ void Monitor::thread_execute()
         NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
         for (const auto& o : hosts)
         {
-            NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
+            NebulaLog::log("MON", Log::INFO, "\t" + o.second->name());
         }
 
         // vmpool->update();
@@ -330,7 +330,7 @@ void Monitor::process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
     HostBase host(msg->payload());
 
-    hpool->erase(host.get_id());
+    hpool->erase(host.oid());
 }
 
 /* -------------------------------------------------------------------------- */
@@ -349,17 +349,17 @@ void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages
     NebulaLog::log("MON", Log::INFO, "Received MONITOR_HOST msg: " + msg->payload());
     HostBase hm(msg->payload());
 
-    auto host = hpool->get(hm.get_id());
+    auto host = hpool->get(hm.oid());
     if (host == nullptr)
     {
         NebulaLog::log("MON", Log::WARNING,
-            "Monitoring received, host does not exists, id = " + std::to_string(hm.get_id()));
+            "Monitoring received, host does not exists, id = " + std::to_string(hm.oid()));
         return;
     }
 
-    host->set_last_monitored(hm.get_last_monitored());
-    host->set_host_share(hm.get_host_share());
-    host->set_vm_ids(hm.get_vm_ids());
+    host->last_monitored(hm.last_monitored());
+    host->host_share(hm.host_share());
+    host->vm_ids(hm.vm_ids());
 
     hpool->update_monitoring(host);
 }

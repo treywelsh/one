@@ -22,7 +22,7 @@
 
 using namespace std;
 
-static const int ONEADMIN_ID = 0;
+static const int ONEADMIN_ID     = 0;
 static const char* ONEADMIN_NAME = "oneadmin";
 
 /* -------------------------------------------------------------------------- */
@@ -43,6 +43,8 @@ int HostBase::from_xml(const std::string &xml_str)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+#define xml_print(name, value) "<"#name">" << value << "</"#name">"
+
 string HostBase::to_xml() const
 {
     string template_xml;
@@ -51,21 +53,22 @@ string HostBase::to_xml() const
 
     ostringstream oss;
 
-    oss <<
-    "<HOST>"
-       "<ID>"            << oid              << "</ID>"              <<
-       "<NAME>"          << name             << "</NAME>"            <<
-       "<STATE>"         << state            << "</STATE>"           <<
-       "<PREV_STATE>"    << prev_state       << "</PREV_STATE>"      <<
-       "<IM_MAD>"        << one_util::escape_xml(im_mad_name)  << "</IM_MAD>" <<
-       "<VM_MAD>"        << one_util::escape_xml(vmm_mad_name) << "</VM_MAD>" <<
-       "<LAST_MON_TIME>" << last_monitored   << "</LAST_MON_TIME>"   <<
-       "<CLUSTER_ID>"    << cluster_id       << "</CLUSTER_ID>"      <<
-       "<CLUSTER>"       << cluster          << "</CLUSTER>"         <<
-       host_share.to_xml(share_xml)  <<
-       vm_ids.to_xml(vm_collection_xml) <<
-       obj_template.to_xml(template_xml) <<
-    "</HOST>";
+    oss << "<HOST>";
+
+    oss << xml_print(ID, _oid);
+    oss << xml_print(NAME, _name);
+    oss << xml_print(STATE, _state);
+    oss << xml_print(PREV_STATE, _prev_state);
+    oss << xml_print(IM_MAD, one_util::escape_xml(_im_mad));
+    oss << xml_print(VM_MAD, one_util::escape_xml(_vmm_mad));
+    oss << xml_print(LAST_MON_TIME, _last_monitored);
+    oss << xml_print(CLUSTER_ID, ClusterableSingle::cluster_id);
+    oss << xml_print(CLUSTER, cluster);
+    oss << _host_share.to_xml(share_xml);
+    oss << _vm_ids.to_xml(vm_collection_xml);
+    oss << obj_template.to_xml(template_xml);
+
+    oss << "</HOST>";
 
     return oss.str();
 }
@@ -80,24 +83,25 @@ int HostBase::init_attributes()
     int rc = 0;
 
     // Get class base attributes
-    rc += xpath(oid, "/HOST/ID", -1);
-    rc += xpath(name, "/HOST/NAME", "not_found");
+    rc += xpath(_oid, "/HOST/ID", -1);
+    rc += xpath(_name, "/HOST/NAME", "not_found");
     rc += xpath(int_state, "/HOST/STATE", 0);
     rc += xpath(int_prev_state, "/HOST/PREV_STATE", 0);
 
-    rc += xpath(im_mad_name, "/HOST/IM_MAD", "not_found");
-    rc += xpath(vmm_mad_name, "/HOST/VM_MAD", "not_found");
+    rc += xpath(_im_mad, "/HOST/IM_MAD", "not_found");
+    rc += xpath(_vmm_mad, "/HOST/VM_MAD", "not_found");
 
-    rc += xpath<time_t>(last_monitored, "/HOST/LAST_MON_TIME", 0);
+    rc += xpath<time_t>(_last_monitored, "/HOST/LAST_MON_TIME", 0);
 
-    rc += xpath(cluster_id, "/HOST/CLUSTER_ID", -1);
-    rc += xpath(cluster,    "/HOST/CLUSTER",    "not_found");
+    rc += xpath(ClusterableSingle::cluster_id, "/HOST/CLUSTER_ID", -1);
+    rc += xpath(cluster, "/HOST/CLUSTER", "not_found");
 
-    state = static_cast<Host::HostState>( int_state );
-    prev_state = static_cast<Host::HostState>( int_prev_state );
+    _state = static_cast<Host::HostState>( int_state );
+    _prev_state = static_cast<Host::HostState>( int_prev_state );
 
     // Set the owner and group to oneadmin
     set_user(0, "");
+
     // ONEADMIN_ID and ONEADMIN_NAME defined locally, as using definitions
     // from GroupPool force linking of nebula_group, nebula_acl, nebula_rm,
     // nebula_um, nebula_vm and others.
@@ -113,7 +117,7 @@ int HostBase::init_attributes()
         return -1;
     }
 
-    rc += host_share.from_xml_node(content[0]);
+    rc += _host_share.from_xml_node(content[0]);
 
     ObjectXML::free_nodes(content);
     content.clear();
@@ -127,13 +131,13 @@ int HostBase::init_attributes()
     }
 
     rc += obj_template.from_xml_node(content[0]);
-    obj_template.get("PUBLIC_CLOUD", public_cloud);
+    obj_template.get("PUBLIC_CLOUD", _public_cloud);
 
     ObjectXML::free_nodes(content);
     content.clear();
 
     // ------------ VMS collection ---------------
-    rc += vm_ids.from_xml(this, "/HOST/");
+    rc += _vm_ids.from_xml(this, "/HOST/");
 
     if (rc != 0)
     {
@@ -146,13 +150,13 @@ int HostBase::init_attributes()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void HostBase::set_vm_ids(const std::set<int>& ids)
+void HostBase::vm_ids(const std::set<int>& ids)
 {
-    vm_ids.clear();
+    _vm_ids.clear();
 
     for (auto id : ids)
     {
-        vm_ids.add(id);
+        _vm_ids.add(id);
     }
 }
 
@@ -161,10 +165,10 @@ void HostBase::set_vm_ids(const std::set<int>& ids)
 
 ostream& operator<<(ostream& o, const HostBase& host)
 {
-    o << "ID          : " << host.oid        << endl;
-    o << "CLUSTER_ID  : " << host.cluster_id << endl;
-    o << "PUBLIC      : " << host.public_cloud << endl;
-    o << host.host_share;
+    o << "ID         : " << host._oid          << endl;
+    o << "CLUSTER_ID : " << host.cluster_id()  << endl;
+    o << "PUBLIC     : " << host._public_cloud << endl;
+    o << host._host_share;
 
     return o;
 }

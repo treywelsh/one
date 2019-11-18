@@ -14,12 +14,10 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-
 #ifndef BASE_OBJECT_H_
 #define BASE_OBJECT_H_
 
 #include "ObjectXML.h"
-
 
 class BaseObject : public ObjectXML
 {
@@ -36,14 +34,14 @@ public:
 
     virtual ~BaseObject() = default;
 
-    int get_id() const
+    int oid() const
     {
-        return oid;
+        return _oid;
     };
 
-    const std::string& get_name() const
+    const std::string& name() const
     {
-        return name;
+        return _name;
     }
 
     /**
@@ -51,10 +49,10 @@ public:
      * @param _uid New User ID
      * @param _uname Name of the new user
      */
-    void set_user(int _uid, const std::string& _uname)
+    void set_user(int uid, const std::string& uname)
     {
-        uid   = _uid;
-        uname = _uname;
+        _uid   = uid;
+        _uname = uname;
     }
 
     /**
@@ -62,23 +60,25 @@ public:
      * @param _gid New Group ID
      * @param _gname Name of the new group
      */
-    void set_group(int _gid, const std::string& _gname)
+    void set_group(int gid, const std::string& gname)
     {
-        gid   = _gid;
-        gname = _gname;
+        _gid   = gid;
+        _gname = gname;
     };
 
     virtual int from_xml(const std::string& xml_string) = 0;
+
     virtual std::string to_xml() const = 0;
 
 protected:
-    int oid                 = -1;
-    int uid                 = -1;
-    int gid                 = -1;
 
-    std::string name;
-    std::string uname;
-    std::string gname;
+    int _oid = -1;
+    int _uid = -1;
+    int _gid = -1;
+
+    std::string _name;
+    std::string _uname;
+    std::string _gname;
 };
 
-#endif //BASE_OBJECT_H_
+#endif //BASE_OBJECT_H

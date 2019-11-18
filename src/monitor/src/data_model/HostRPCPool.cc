@@ -14,13 +14,13 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "HostRemotePool.h"
+#include "HostRPCPool.h"
 #include "NebulaLog.h"
 
 const char * monit_table = "host_monitoring";
 const char * monit_db_names = "hid, last_mon_time, body";
 
-int HostRemotePool::load_info(xmlrpc_c::value &result)
+int HostRPCPool::load_info(xmlrpc_c::value &result)
 {
     try
     {
@@ -42,7 +42,7 @@ int HostRemotePool::load_info(xmlrpc_c::value &result)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int HostRemotePool::update_monitoring(HostBase* h)
+int HostRPCPool::update_monitoring(HostBase* h)
 {
     auto sql_xml = db->escape_str(h->to_xml());
 
@@ -61,8 +61,8 @@ int HostRemotePool::update_monitoring(HostBase* h)
 
     ostringstream oss;
     oss << "REPLACE INTO " << monit_table << " ("<< monit_db_names <<") VALUES ("
-        <<          h->get_id()             << ","
-        <<          h->get_last_monitored() << ","
+        <<          h->oid()             << ","
+        <<          h->last_monitored() << ","
         << "'" <<   sql_xml                 << "')";
 
     db->free_str(sql_xml);

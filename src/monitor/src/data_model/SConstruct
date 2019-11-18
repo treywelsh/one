@@ -24,9 +24,9 @@ lib_name='nebula_data_model'
 source_files=[
     'HostBase.cc',
     'VirtualMachineBase.cc',
-    'RemotePool.cc',
-    'HostRemotePool.cc',
-    'VMRemotePool.cc'
+    'RPCPool.cc',
+    'HostRPCPool.cc',
+    'VMRPCPool.cc'
 ]
 
 # Build library

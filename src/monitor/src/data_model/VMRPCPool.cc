@@ -14,9 +14,9 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "VMRemotePool.h"
+#include "VMRPCPool.h"
 
-int VMRemotePool::load_info(xmlrpc_c::value &result)
+int VMRPCPool::load_info(xmlrpc_c::value &result)
 {
     try
     {

@@ -14,40 +14,58 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
+#include "RPCPool.h"
 
-#ifndef VM_REMOTE_POOL_H_
-#define VM_REMOTE_POOL_H_
-
-#include "VirtualMachineBase.h"
-#include "RemotePool.h"
-
-// Provides list of HostBase objects
-class VMRemotePool : public RemotePool
+int RPCPool::update()
 {
-public:
-    explicit VMRemotePool(SqlDB* db)
-    : RemotePool(db)
-    {}
+    clear();
 
-    VirtualMachineBase* get(int oid) const
+    // ---------------------------------------------------------------------
+    // Load the ids (to get an updated list of the pool)
+    // ---------------------------------------------------------------------
+
+    xmlrpc_c::value result;
+
+    int rc = load_info(result);
+
+    if (rc != 0)
     {
-        return RemotePool::get<VirtualMachineBase>(oid);
+        NebulaLog::log("POOL", Log::ERROR, "Could not retrieve pool info.");
+        return -1;
     }
 
-protected:
-    int load_info(xmlrpc_c::value &result) override;
+    vector<xmlrpc_c::value> values =
+                    xmlrpc_c::value_array(result).vectorValueValue();
 
-    int get_nodes(const ObjectXML& xml,
-        std::vector<xmlNodePtr>& content) const override
+    bool   success = xmlrpc_c::value_boolean(values[0]);
+    string message = xmlrpc_c::value_string(values[1]);
+
+    if ( !success )
     {
-        return xml.get_nodes("/VM_POOL/VM[STATE=1]", content);
+        ostringstream oss;
+
+        oss << "ONE returned error while retrieving pool info:" << endl;
+        oss << message;
+
+        NebulaLog::log("POOL", Log::ERROR, oss);
+        return -1;
     }
 
-    void add_object(xmlNodePtr node)
-    {
-        RemotePool::add_object<VirtualMachineBase>(node);
-    }
-private:
-};
+    ObjectXML xml(message);
 
-#endif // VM_REMOTE_POOL_H_
+    vector<xmlNodePtr> nodes;
+
+    get_nodes(xml, nodes);
+
+    for (const auto& node : nodes)
+    {
+        add_object(node);
+    }
+
+    xml.free_nodes(nodes);
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */

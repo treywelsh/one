@@ -61,13 +61,13 @@ int VirtualMachineBase::init_attributes()
     /**************************************************************************/
     /* VM attributes and flags                                                */
     /**************************************************************************/
-    rc = xpath(oid, "/VM/ID", -1);
-    rc += xpath(uid, "/VM/UID", -1);
-    rc += xpath(gid, "/VM/GID", -1);
+    rc = xpath(_oid, "/VM/ID", -1);
+    rc += xpath(_uid, "/VM/UID", -1);
+    rc += xpath(_gid, "/VM/GID", -1);
 
-    rc += xpath(name, "/VM/NAME", "not_found");
-    rc += xpath(uname, "/VM/UNAME", "not_found");
-    rc += xpath(gname, "/VM/GNAME", "not_found");
+    rc += xpath(_name, "/VM/NAME", "not_found");
+    rc += xpath(_uname, "/VM/UNAME", "not_found");
+    rc += xpath(_gname, "/VM/GNAME", "not_found");
 
     rc += xpath(tmp, "/VM/STATE", -1);
     active = tmp == 3;
@@ -244,7 +244,7 @@ void VirtualMachineBase::init_storage_usage()
 
 ostream& operator<<(ostream& os, VirtualMachineBase& vm)
 {
-    os << "Virtual Machine: " << vm.oid << endl << endl;
+    os << "Virtual Machine: " << vm._oid << endl << endl;
 
     os << endl;
 

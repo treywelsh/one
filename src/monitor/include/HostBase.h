@@ -13,8 +13,6 @@
 /* See the License for the specific language governing permissions and        */
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
-
-
 #ifndef HOST_BASE_H_
 #define HOST_BASE_H_
 
@@ -59,58 +57,58 @@ public:
      */
     std::string to_xml() const override;
 
-    int get_cid() const
+    int cluster_id() const
     {
-        return cluster_id;
+        return ClusterableSingle::cluster_id;
     };
 
-    Host::HostState get_state() const
+    Host::HostState state() const
     {
-        return state;
+        return _state;
     }
 
-    Host::HostState get_prev_state() const
+    Host::HostState prev_state() const
     {
-        return prev_state;
+        return _prev_state;
     }
 
     /**
      * Retrieves VMM mad name
      *    @return string vmm mad name
      */
-    const std::string& get_vmm_mad() const
+    const std::string& vmm_mad() const
     {
-        return vmm_mad_name;
+        return _vmm_mad;
     };
 
     /**
      * Retrieves IM mad name
      *    @return string im mad name
      */
-    const std::string& get_im_mad() const
+    const std::string& im_mad() const
     {
-        return im_mad_name;
+        return _im_mad;
     };
 
-    const std::set<int>& get_vm_ids() const
+    const std::set<int>& vm_ids() const
     {
-        return vm_ids.get_collection();
+        return _vm_ids.get_collection();
     }
 
-    void set_vm_ids(const std::set<int>& ids);
+    void vm_ids(const std::set<int>& ids);
 
-    bool is_public_cloud() const
+    bool public_cloud() const
     {
-        return public_cloud;
+        return _public_cloud;
     }
 
-    time_t get_last_monitored() const { return last_monitored; }
+    time_t last_monitored() const { return _last_monitored; }
 
-    void set_last_monitored(time_t lm) { last_monitored = lm; }
+    void last_monitored(time_t lm) { _last_monitored = lm; }
 
-    const HostShare& get_host_share() const { return host_share; }
+    const HostShare& host_share() const { return _host_share; }
 
-    void set_host_share(const HostShare& hs) { host_share = hs; }
+    void host_share(const HostShare& hs) { _host_share = hs; }
 
     /**
      *  Prints the Host information to an output stream. This function is used
@@ -122,17 +120,20 @@ protected:
     int init_attributes();
 
 private:
-    Host::HostState  state          = Host::HostState::INIT;
-    Host::HostState  prev_state     = Host::HostState::INIT;
-    std::string      vmm_mad_name;
-    std::string      im_mad_name;
-    time_t           last_monitored = 0;
-    bool             public_cloud   = false;
+    Host::HostState _state      = Host::HostState::INIT;
+    Host::HostState _prev_state = Host::HostState::INIT;
+
+    std::string _vmm_mad;
+    std::string _im_mad;
+
+    time_t _last_monitored = 0;
+    bool   _public_cloud   = false;
 
     // HostShare includes Host, uses it only for two methods
     // these methods should be refactored to remove Host dependency
-    HostShare        host_share;
-    ObjectCollection vm_ids{"VMS"};
+    HostShare        _host_share;
+    ObjectCollection _vm_ids{"VMS"};
+
     Template         obj_template;
 };
 

@@ -13,37 +13,24 @@
 /* See the License for the specific language governing permissions and        */
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
+#ifndef VM_RPC_POOL_H_
+#define VM_RPC_POOL_H_
 
-
-#ifndef HOST_REMOTE_POOL_H_
-#define HOST_REMOTE_POOL_H_
-
-#include "HostBase.h"
-#include "RemotePool.h"
+#include "VirtualMachineBase.h"
+#include "RPCPool.h"
 
 // Provides list of HostBase objects
-class HostRemotePool : public RemotePool
+class VMRPCPool : public RPCPool
 {
 public:
-    explicit HostRemotePool(SqlDB* db)
-    : RemotePool(db)
+    explicit VMRPCPool(SqlDB* db)
+    : RPCPool(db)
     {}
 
-    HostBase* get(int oid) const
+    VirtualMachineBase* get(int oid) const
     {
-        return RemotePool::get<HostBase>(oid);
+        return RPCPool::get<VirtualMachineBase>(oid);
     }
-
-    void add_object(const std::string& xml_string)
-    {
-        // todo Handle error state, when the object can't be constructed from xml
-        RemotePool::add_object(std::unique_ptr<HostBase>(new HostBase(xml_string)));
-    }
-
-    /**
-     *  Write monitoring data to DB
-     */
-    int update_monitoring(HostBase* h);
 
 protected:
     int load_info(xmlrpc_c::value &result) override;
@@ -51,17 +38,15 @@ protected:
     int get_nodes(const ObjectXML& xml,
         std::vector<xmlNodePtr>& content) const override
     {
-        // todo Limit the list only to active hosts?
-        // return xml.get_nodes("/HOST_POOL/HOST[STATE=1 or STATE=2]", content);
-        return xml.get_nodes("/HOST_POOL/HOST", content);
+        return xml.get_nodes("/VM_POOL/VM[STATE=1]", content);
     }
 
-    void add_object(xmlNodePtr node)
+    void add_object(xmlNodePtr node) override
     {
-        RemotePool::add_object<HostBase>(node);
+        RPCPool::add_object<VirtualMachineBase>(node);
     }
 
 private:
 };
 
-#endif // HOST_REMOTE_POOL_H_
+#endif // VM_RPC_POOL_H_
