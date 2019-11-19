@@ -19,15 +19,15 @@
 
 #include "NebulaTemplate.h"
 
-class MonitorTemplate : public NebulaTemplate
+class MonitorConfigTemplate : public NebulaTemplate
 {
 public:
 
-    explicit MonitorTemplate(const string& etc_location):
+    explicit MonitorConfigTemplate(const string& etc_location):
         NebulaTemplate(etc_location, "monitor.conf")
         {};
 
-    ~MonitorTemplate() = default;
+    ~MonitorConfigTemplate() = default;
 
 private:
     /**

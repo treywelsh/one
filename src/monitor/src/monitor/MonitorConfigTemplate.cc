@@ -14,9 +14,9 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "MonitorTemplate.h"
+#include "MonitorConfigTemplate.h"
 
-void MonitorTemplate::set_conf_default()
+void MonitorConfigTemplate::set_conf_default()
 {
     //SingleAttribute *   attribute;
     VectorAttribute *   vattribute;

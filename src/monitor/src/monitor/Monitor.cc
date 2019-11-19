@@ -15,7 +15,7 @@
 /* -------------------------------------------------------------------------- */
 
 #include "monitor.h"
-#include "MonitorTemplate.h"
+#include "MonitorConfigTemplate.h"
 #include "NebulaLog.h"
 #include "Client.h"
 #include "StreamManager.h"
@@ -58,7 +58,7 @@ void Monitor::start()
     }
 
     // Configuration File
-    MonitorTemplate conf(etc_path);
+    MonitorConfigTemplate conf(etc_path);
     if ( conf.load_configuration() != 0 )
     {
         throw runtime_error("Error reading configuration file.");
