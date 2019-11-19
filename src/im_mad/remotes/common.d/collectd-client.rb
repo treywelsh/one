@@ -39,12 +39,14 @@ class CollectdClient
         @last_update = last_update
     end
 
-    def send(data)
+    def send(data, secure = true)
         message, code = data
         code ? result = 'SUCCESS' : result = 'FAILURE'
-        message = "MONITOR #{result} #{@retries} #{message}\n"
 
-        @socket.send(encrypt(message), 0)
+        message = "MONITOR #{result} #{@retries} #{message}\n"
+        message = encrypt(message) if secure == true
+
+        @socket.send(message, 0) # TODO: Encrypt 0 ?
     end
 
     # TODO: Send if != DB info
@@ -69,6 +71,7 @@ class CollectdClient
 
     private
 
+    # TODO: Get keys from STDIN
     def init_keys
         ssh_conf = "#{ENV['HOME']}/.ssh"
 
@@ -171,6 +174,7 @@ end
 # Argument processing #
 #######################
 
+# TODO: Parse STDIN XML from monitord
 host         = ENV['SSH_CLIENT'].split.first
 port         = ARGV[2]
 hypervisor   = ARGV[0]
