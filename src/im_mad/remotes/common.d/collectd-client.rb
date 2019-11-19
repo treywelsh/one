@@ -24,6 +24,7 @@ require 'zlib'
 require 'probe-manager'
 require 'yaml'
 require 'open3'
+require 'openssl'
 
 DIRNAME = File.dirname(__FILE__)
 
@@ -31,6 +32,7 @@ class CollectdClient
 
     def initialize(host, port, hypervisor, ds_location, retries)
         @socket = open_socket(host, port)
+        init_keys
 
         probe_info(port, hypervisor, ds_location, retries)
 
@@ -40,7 +42,9 @@ class CollectdClient
     def send(data)
         message, code = data
         code ? result = 'SUCCESS' : result = 'FAILURE'
-        @socket.send("MONITOR #{result} #{@retries} #{message}\n", 0)
+        message = "MONITOR #{result} #{@retries} #{message}\n"
+
+        @socket.send(encrypt(message), 0)
     end
 
     # TODO: Send if != DB info
@@ -64,6 +68,30 @@ class CollectdClient
     end
 
     private
+
+    def init_keys
+        ssh_conf = "#{ENV['HOME']}/.ssh"
+
+        key_pub = 'id_rsa.pub'
+        key_priv = "#{ssh_conf}/id_rsa"
+        key_pem = "#{ssh_conf}/#{key_pub}.pem"
+        key_pub.prepend "#{ssh_conf}/"
+
+        gen_pem = "ssh-keygen -f #{key_pub} -e -m pem > #{key_pem}"
+
+        `#{gen_pem}` unless File.file?(key_pem)
+
+        @key_pub = OpenSSL::PKey::RSA.new File.read key_pem
+        @key_priv = OpenSSL::PKey::RSA.new File.read key_priv
+    end
+
+    def encrypt(message)
+        @key_pub.public_encrypt(message)
+    end
+
+    def decrypt(message)
+        @key_priv.private_decrypt(message)
+    end
 
     def probe_info(port, hypervisor, ds_location, retries)
         @port           = port
