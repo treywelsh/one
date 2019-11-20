@@ -357,33 +357,31 @@ void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages
 {
     NebulaLog::log("MON", Log::INFO, "process_monitor_host: " + msg->payload());
     try {
-        ObjectXML xml(msg->payload());
-        int hid;
-        xml.xpath(hid, "/MONITORING/ID", -1);
-        if (hid == -1)
+        HostMonitoringTemplate monitoring;
+
+        if (monitoring.from_xml(msg->payload()) != 0 || monitoring.oid() == -1)
         {
-            NebulaLog::log("MON", Log::WARNING,
-                "Unable to read host id from message: " + msg->payload());
+            NebulaLog::log("MON", Log::ERROR, "Error parsing monitoring msg: " + msg->payload());
             return;
         }
 
-        auto host = hpool->get(hid);
+        auto host = hpool->get(monitoring.oid());
         if (host == nullptr)
         {
             NebulaLog::log("MON", Log::WARNING,
-                "Monitoring received, host does not exists, id = " + std::to_string(hid));
+                "Monitoring received, host does not exists, id = " + std::to_string(monitoring.oid()));
             return;
         }
 
-        if (host->parse_monitoring(msg->payload()) !=0)
+        if (hpool->update_monitoring(monitoring) != 0)
         {
-            NebulaLog::log("MON", Log::WARNING, "Unable to parse host monitoring: " + msg->payload());
+            NebulaLog::log("MON", Log::ERROR, "Unable to write monitoring to DB");
             return;
-        }
+        };
 
-        hpool->update_monitoring(host);
+        host->last_monitored(monitoring.timestamp());
 
-        NebulaLog::log("MON", Log::INFO, "Monitoring succesfully written to db: " + msg->payload());
+        NebulaLog::log("MON", Log::INFO, "Monitoring succesfully written to DB");
     }
     catch(const std::exception &e)
     {

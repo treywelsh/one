@@ -78,6 +78,8 @@ class HostMonitoringTemplate
 public:
     std::string to_xml() const;
 
+    int oid() const { return _oid; }
+
     time_t timestamp() const { return _timestamp; }
 
     /**

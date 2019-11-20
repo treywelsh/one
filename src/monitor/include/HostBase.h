@@ -103,13 +103,9 @@ public:
         return _public_cloud;
     }
 
-    time_t last_monitored() const { return _monitoring.timestamp(); }
+    time_t last_monitored() const { return _last_monitored; }
 
-    // void last_monitored(time_t lm) { _last_monitored = lm; }
-
-    const HostMonitoringTemplate& monitoring() const { return _monitoring; }
-
-    int parse_monitoring(const std::string& xml);
+    void last_monitored(time_t lm) { _last_monitored = lm; }
 
     /**
      *  Prints the Host information to an output stream. This function is used
@@ -133,7 +129,7 @@ private:
 
     Template         _obj_template;
 
-    HostMonitoringTemplate _monitoring;
+    time_t           _last_monitored = 0;
 };
 
 #endif // HOST_BASE_H_

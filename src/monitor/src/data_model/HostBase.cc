@@ -59,9 +59,7 @@ string HostBase::to_xml() const
     oss << xml_print(VM_MAD, one_util::escape_xml(_vmm_mad));
     oss << xml_print(CLUSTER_ID, ClusterableSingle::cluster_id);
     oss << xml_print(CLUSTER, cluster);
-    //oss << _host_share.to_xml(share_xml);
     oss << _vm_ids.to_xml(vm_collection_xml);
-    oss << _monitoring.to_xml();
 
     oss << "</HOST>";
 
@@ -142,14 +140,6 @@ void HostBase::vm_ids(const std::set<int>& ids)
     {
         _vm_ids.add(id);
     }
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int HostBase::parse_monitoring(const std::string& xml_string)
-{
-    return _monitoring.from_xml(xml_string);
 }
 
 /* -------------------------------------------------------------------------- */

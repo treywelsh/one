@@ -41,7 +41,7 @@ public:
     /**
      *  Write monitoring data to DB
      */
-    int update_monitoring(HostBase* h);
+    int update_monitoring(const HostMonitoringTemplate& h);
 
 protected:
     int load_info(xmlrpc_c::value &result) override;

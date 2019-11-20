@@ -56,7 +56,7 @@ int HostMonitoringTemplate::from_xml(const std::string& xml_string)
     ObjectXML xml(xml_string);
 
     int rc = xml.xpath(_timestamp, "/MONITORING/TIMESTAMP", 0L);
-    rc += xml.xpath(_oid, "/MONITORING/ID", 0);
+    rc += xml.xpath(_oid, "/MONITORING/ID", -1);
 
     if (rc < 0)
     {

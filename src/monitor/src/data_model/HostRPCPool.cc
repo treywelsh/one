@@ -42,9 +42,8 @@ int HostRPCPool::load_info(xmlrpc_c::value &result)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int HostRPCPool::update_monitoring(HostBase* h)
+int HostRPCPool::update_monitoring(const HostMonitoringTemplate& monitoring)
 {
-    const auto& monitoring = h->monitoring();
     auto sql_xml = db->escape_str(monitoring.to_xml());
 
     if (sql_xml == 0)
@@ -62,7 +61,7 @@ int HostRPCPool::update_monitoring(HostBase* h)
 
     ostringstream oss;
     oss << "REPLACE INTO " << monit_table << " ("<< monit_db_names <<") VALUES ("
-        <<          h->oid()             << ","
+        <<          monitoring.oid()       << ","
         <<          monitoring.timestamp() << ","
         << "'" <<   sql_xml                 << "')";
 
