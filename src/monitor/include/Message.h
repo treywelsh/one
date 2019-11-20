@@ -185,9 +185,16 @@ int Message<E>::write_to(std::string& out, bool encrypt) const
 
     if (!_payload.empty())
     {
-        if ( encrypt && rsa_public_encrypt(_payload, secret) )
+        if (encrypt)
         {
-            return -1;
+            if (rsa_public_encrypt(_payload, secret) != 0)
+            {
+                return -1;
+            }
+        }
+        else
+        {
+            secret = _payload;
         }
 
         if (zlib_compress(secret, payloaz) == -1)
