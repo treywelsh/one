@@ -31,7 +31,7 @@ DIRNAME = File.dirname(__FILE__)
 class CollectdClient
 
     def initialize(host, port, hypervisor, ds_location, retries)
-        @socket = open_socket(host, port)
+        open_socket(host, port)
         init_keys
 
         probe_info(port, hypervisor, ds_location, retries)
@@ -39,29 +39,32 @@ class CollectdClient
         @last_update = last_update
     end
 
-    def send(data, secure = true)
+    def send(data, socket, secure = true)
         message, code = data
         code ? result = 'SUCCESS' : result = 'FAILURE'
 
         message = "MONITOR #{result} #{@retries} #{message}\n"
         message = encrypt(message) if secure == true
 
-        @socket.send(message, 0) # TODO: Encrypt 0 ?
+        socket.send(message, 0) # TODO: Encrypt 0 ?
     end
 
     # TODO: Send if != DB info
-    def optsend(data)
-        send(data)
+    def optsend(data, protocol)
+        socket = @socket_udp
+        socket = @socket_tcp if protocol == 'tcp'
+
+        send(data, socket) unless db_match(data)
     end
 
     # Runs the specifed probes and sends the data
-    def monitor(probes, push_period)
+    def monitor(probes, push_period, protocol)
         before = Time.now
 
         exit 0 if stop?
 
         data = run_probes(probes, push_period)
-        client.send data unless db_match(data)
+        client.optsend(data, protocol)
 
         # Sleep during the Cycle
         happened = (Time.now - before).to_i
@@ -154,10 +157,14 @@ class CollectdClient
     end
 
     # TODO: Encript socket
-    def open_socket(host, port)
+    def open_sockets(host, port)
         ip = ipv4_address(host)
-        @socket = UDPSocket.new
-        @socket.bind(ip, port)
+
+        @socket_udp = UDPSocket.new
+        @socket_udp.bind(ip, port)
+
+        @socket_tcp = TCPSocket.new
+        @socket_tcp.bind(ip, port)
     end
 
     def last_update
@@ -174,13 +181,15 @@ end
 # Argument processing #
 #######################
 
-# TODO: Parse STDIN XML from monitord
 host         = ENV['SSH_CLIENT'].split.first
 port         = ARGV[2]
 hypervisor   = ARGV[0]
 ds_location  = ARGV[1]
 push_periods = ARGV[3]
 retries      = ARGV[4]
+
+# TODO: Parse STDIN XML from monitord
+# xml = Base64.decode64 STDIN.read
 
 #############################
 # Start push monitorization #
@@ -189,10 +198,10 @@ retries      = ARGV[4]
 client = CollectdClient.new(host, port, hypervisor, ds_location, retries)
 
 threads = []
-threads << Thread.new { client.monitor('host/system', push_periods[0]) }
-threads << Thread.new { client.monitor('host/monitor', push_periods[1]) }
-threads << Thread.new { client.monitor('vms/status', push_periods[2]) }
-threads << Thread.new { client.monitor('vms/monitor', push_periods[3]) }
+threads << Thread.new { client.monitor('host/system', push_periods[0], 'tcp') }
+threads << Thread.new { client.monitor('host/monitor', push_periods[1], 'udp') }
+threads << Thread.new { client.monitor('vms/status', push_periods[2], 'tcp') }
+threads << Thread.new { client.monitor('vms/monitor', push_periods[3], 'udp') }
 threads << Thread.new do
     sleep push_periods[0]
     `bash #{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd`
