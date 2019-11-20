@@ -95,8 +95,14 @@ def print_all_vm_info(hypervisor)
     puts Base64.encode64(compressed).delete("\n")
 end
 
-def print_all_vm_template(hypervisor)
-    vms=hypervisor.get_all_vm_info
+def print_all_vm_template(hypervisor, information)
+    vms = nil
+
+    if information == 'status'
+        vms = hypervisor.get_all_vm_status
+    else
+        vms = hypervisor.get_all_vm_info
+    end
 
     return nil if vms.nil?
 
