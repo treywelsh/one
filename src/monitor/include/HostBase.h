@@ -18,9 +18,10 @@
 
 #include <set>
 #include "BaseObject.h"
-#include "HostShare.h"
 #include "ObjectCollection.h"
-#include "Host.h"   // For HostState, which should be moved here
+#include "HostMonitoringTemplate.h"
+#include "Host.h"   // For HostState, can we moved it to reduce dependencies?
+
 
 // Class storing Host data, it shouldn't contain any logic
 // Scheduler, Monitor, oned should derive from this class
@@ -102,13 +103,13 @@ public:
         return _public_cloud;
     }
 
-    time_t last_monitored() const { return _last_monitored; }
+    time_t last_monitored() const { return _monitoring.timestamp(); }
 
-    void last_monitored(time_t lm) { _last_monitored = lm; }
+    // void last_monitored(time_t lm) { _last_monitored = lm; }
 
-    const HostShare& host_share() const { return _host_share; }
+    const HostMonitoringTemplate& monitoring() const { return _monitoring; }
 
-    void host_share(const HostShare& hs) { _host_share = hs; }
+    int parse_monitoring(const std::string& xml);
 
     /**
      *  Prints the Host information to an output stream. This function is used
@@ -126,15 +127,13 @@ private:
     std::string _vmm_mad;
     std::string _im_mad;
 
-    time_t _last_monitored = 0;
     bool   _public_cloud   = false;
 
-    // HostShare includes Host, uses it only for two methods
-    // these methods should be refactored to remove Host dependency
-    HostShare        _host_share;
     ObjectCollection _vm_ids{"VMS"};
 
-    Template         obj_template;
+    Template         _obj_template;
+
+    HostMonitoringTemplate _monitoring;
 };
 
 #endif // HOST_BASE_H_

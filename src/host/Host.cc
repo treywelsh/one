@@ -73,6 +73,15 @@ const char * Host::monit_db_names = "hid, last_mon_time, body";
 const char * Host::monit_db_bootstrap = "CREATE TABLE IF NOT EXISTS "
     "host_monitoring (hid INTEGER, last_mon_time INTEGER, body MEDIUMTEXT, "
     "PRIMARY KEY(hid, last_mon_time))";
+
+
+const char * Host::monit_table_new = "host_monitoring_new";
+
+const char * Host::monit_db_names_new = "hid, timestamp, body";
+
+const char * Host::monit_db_bootstrap_new = "CREATE TABLE IF NOT EXISTS "
+    "host_monitoring_new (hid INTEGER, timestamp INTEGER, body MEDIUMTEXT, "
+    "PRIMARY KEY(hid, timestamp))";
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 

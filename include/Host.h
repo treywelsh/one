@@ -555,11 +555,19 @@ private:
 
     static const char * table;
 
+    // todo After integration of new monitoring, remove old tables
+    //      and remove _new to names without suffix
     static const char * monit_db_names;
 
     static const char * monit_db_bootstrap;
 
     static const char * monit_table;
+
+    static const char * monit_db_names_new;
+
+    static const char * monit_db_bootstrap_new;
+
+    static const char * monit_table_new;
 
     /**
      *  Execute an INSERT or REPLACE Sql query.
@@ -580,9 +588,11 @@ private:
 
         ostringstream oss_host(Host::db_bootstrap);
         ostringstream oss_monit(Host::monit_db_bootstrap);
+        ostringstream oss_monit_new(Host::monit_db_bootstrap_new);
 
         rc =  db->exec_local_wr(oss_host);
         rc += db->exec_local_wr(oss_monit);
+        rc += db->exec_local_wr(oss_monit_new);
 
         return rc;
     };

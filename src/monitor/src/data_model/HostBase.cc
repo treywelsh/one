@@ -15,15 +15,13 @@
 /* -------------------------------------------------------------------------- */
 
 #include "HostBase.h"
-// #include "GroupPool.h"
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 using namespace std;
 
-static const int ONEADMIN_ID     = 0;
-static const char* ONEADMIN_NAME = "oneadmin";
+#define xml_print(name, value) "<"#name">" << value << "</"#name">"
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -43,8 +41,6 @@ int HostBase::from_xml(const std::string &xml_str)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-#define xml_print(name, value) "<"#name">" << value << "</"#name">"
-
 string HostBase::to_xml() const
 {
     string template_xml;
@@ -61,12 +57,11 @@ string HostBase::to_xml() const
     oss << xml_print(PREV_STATE, _prev_state);
     oss << xml_print(IM_MAD, one_util::escape_xml(_im_mad));
     oss << xml_print(VM_MAD, one_util::escape_xml(_vmm_mad));
-    oss << xml_print(LAST_MON_TIME, _last_monitored);
     oss << xml_print(CLUSTER_ID, ClusterableSingle::cluster_id);
     oss << xml_print(CLUSTER, cluster);
-    oss << _host_share.to_xml(share_xml);
+    //oss << _host_share.to_xml(share_xml);
     oss << _vm_ids.to_xml(vm_collection_xml);
-    oss << obj_template.to_xml(template_xml);
+    oss << _monitoring.to_xml();
 
     oss << "</HOST>";
 
@@ -91,22 +86,11 @@ int HostBase::init_attributes()
     rc += xpath(_im_mad, "/HOST/IM_MAD", "not_found");
     rc += xpath(_vmm_mad, "/HOST/VM_MAD", "not_found");
 
-    rc += xpath<time_t>(_last_monitored, "/HOST/LAST_MON_TIME", 0);
-
     rc += xpath(ClusterableSingle::cluster_id, "/HOST/CLUSTER_ID", -1);
     rc += xpath(cluster, "/HOST/CLUSTER", "not_found");
 
     _state = static_cast<Host::HostState>( int_state );
     _prev_state = static_cast<Host::HostState>( int_prev_state );
-
-    // Set the owner and group to oneadmin
-    set_user(0, "");
-
-    // ONEADMIN_ID and ONEADMIN_NAME defined locally, as using definitions
-    // from GroupPool force linking of nebula_group, nebula_acl, nebula_rm,
-    // nebula_um, nebula_vm and others.
-    // set_group(GroupPool::ONEADMIN_ID, GroupPool::ONEADMIN_NAME);
-    set_group(ONEADMIN_ID, ONEADMIN_NAME);
 
     // ------------ Host Share ---------------
     vector<xmlNodePtr> content;
@@ -117,7 +101,7 @@ int HostBase::init_attributes()
         return -1;
     }
 
-    rc += _host_share.from_xml_node(content[0]);
+    // rc += _host_share.from_xml_node(content[0]);
 
     ObjectXML::free_nodes(content);
     content.clear();
@@ -130,8 +114,8 @@ int HostBase::init_attributes()
         return -1;
     }
 
-    rc += obj_template.from_xml_node(content[0]);
-    obj_template.get("PUBLIC_CLOUD", _public_cloud);
+    rc += _obj_template.from_xml_node(content[0]);
+    _obj_template.get("PUBLIC_CLOUD", _public_cloud);
 
     ObjectXML::free_nodes(content);
     content.clear();
@@ -163,12 +147,20 @@ void HostBase::vm_ids(const std::set<int>& ids)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+int HostBase::parse_monitoring(const std::string& xml_string)
+{
+    return _monitoring.from_xml(xml_string);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 ostream& operator<<(ostream& o, const HostBase& host)
 {
     o << "ID         : " << host._oid          << endl;
     o << "CLUSTER_ID : " << host.cluster_id()  << endl;
     o << "PUBLIC     : " << host._public_cloud << endl;
-    o << host._host_share;
+    // todo print whatever debug info you need
 
     return o;
 }

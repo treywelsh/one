@@ -279,6 +279,7 @@ void Monitor::thread_execute()
     // todo This initialization should be moved out of the thread, to the initialization phase
     //      read drivers from config
     driver_t driver("../test/mock_driver", "2");    // note mock_driver is not in the repository
+    driver.register_action(MonitorDriverMessages::UNDEFINED, std::bind(&Monitor::process_undefined, this, _1));
     driver.register_action(MonitorDriverMessages::MONITOR_VM, std::bind(&Monitor::process_monitor_vm, this, _1));
     driver.register_action(MonitorDriverMessages::MONITOR_HOST, std::bind(&Monitor::process_monitor_host, this, _1));
     driver.register_action(MonitorDriverMessages::SYSTEM_HOST, std::bind(&Monitor::process_system_host, this, _1));
@@ -336,6 +337,14 @@ void Monitor::process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+void Monitor::process_monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
     NebulaLog::log("MON", Log::INFO, "Received MONITOR_VM msg: " + msg->payload());
@@ -346,22 +355,40 @@ void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>>
 
 void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
-    NebulaLog::log("MON", Log::INFO, "Received MONITOR_HOST msg: " + msg->payload());
-    HostBase hm(msg->payload());
+    NebulaLog::log("MON", Log::INFO, "process_monitor_host: " + msg->payload());
+    try {
+        ObjectXML xml(msg->payload());
+        int hid;
+        xml.xpath(hid, "/MONITORING/ID", -1);
+        if (hid == -1)
+        {
+            NebulaLog::log("MON", Log::WARNING,
+                "Unable to read host id from message: " + msg->payload());
+            return;
+        }
 
-    auto host = hpool->get(hm.oid());
-    if (host == nullptr)
-    {
-        NebulaLog::log("MON", Log::WARNING,
-            "Monitoring received, host does not exists, id = " + std::to_string(hm.oid()));
-        return;
+        auto host = hpool->get(hid);
+        if (host == nullptr)
+        {
+            NebulaLog::log("MON", Log::WARNING,
+                "Monitoring received, host does not exists, id = " + std::to_string(hid));
+            return;
+        }
+
+        if (host->parse_monitoring(msg->payload()) !=0)
+        {
+            NebulaLog::log("MON", Log::WARNING, "Unable to parse host monitoring: " + msg->payload());
+            return;
+        }
+
+        hpool->update_monitoring(host);
+
+        NebulaLog::log("MON", Log::INFO, "Monitoring succesfully written to db: " + msg->payload());
     }
-
-    host->last_monitored(hm.last_monitored());
-    host->host_share(hm.host_share());
-    host->vm_ids(hm.vm_ids());
-
-    hpool->update_monitoring(host);
+    catch(const std::exception &e)
+    {
+        NebulaLog::log("MON", Log::ERROR, string("process_monitor_host: ") + e.what());
+    }
 }
 
 /* -------------------------------------------------------------------------- */

@@ -37,6 +37,7 @@ protected:
     void process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
 
     // Monitor driver message handlers
+    void process_monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void process_system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
