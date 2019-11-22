@@ -28,67 +28,24 @@
 #include <signal.h>
 
 using namespace std;
+using namespace std::placeholders; // for _1
 
 void Monitor::start()
 {
-    // System directories
-    string log_file;
-    string etc_path;
-    string var_location;
-
-    const char* nebula_location = getenv("ONE_LOCATION");
-
-    if (nebula_location == nullptr) // OpenNebula installed under root directory
-    {
-        log_file     = "/var/log/one/monitor.log";
-        etc_path     = "/etc/one/";
-        var_location = "/var/lib/one/";
-    }
-    else
-    {
-        string nl = nebula_location;
-        if (nl[nl.size() - 1] != '/')
-        {
-            nl += "/";
-        }
-
-        log_file     = nl + "var/monitor.log";
-        etc_path     = nl + "etc/";
-        var_location = nl + "var/";
-    }
-
     // Configuration File
-    MonitorConfigTemplate conf(etc_path);
-    if ( conf.load_configuration() != 0 )
+    config = new MonitorConfigTemplate(get_defaults_location());
+    if (config->load_configuration() != 0)
     {
         throw runtime_error("Error reading configuration file.");
     }
 
     // Log system
-    NebulaLog::LogType log_system = NebulaLog::STD;
-    Log::MessageType clevel = Log::WARNING;
-
-    const VectorAttribute *log = conf.get("LOG");
-
-    if (log != 0)
-    {
-        string value;
-        int ilevel;
-
-        value      = log->vector_value("SYSTEM");
-        log_system = NebulaLog::str_to_type(value);
-
-        value  = log->vector_value("DEBUG_LEVEL");
-        ilevel = atoi(value.c_str());
-
-        if (Log::ERROR <= ilevel && ilevel <= Log::DDDEBUG)
-        {
-            clevel = static_cast<Log::MessageType>(ilevel);
-        }
-    }
+    NebulaLog::LogType log_system = get_log_system(NebulaLog::STD);
+    Log::MessageType clevel = get_debug_level(Log::WARNING);
 
     if (log_system != NebulaLog::UNDEFINED)
     {
+        string log_file = get_log_location() + "monitor.log";
         NebulaLog::init_log_system(log_system,
                                    clevel,
                                    log_file.c_str(),
@@ -108,7 +65,7 @@ void Monitor::start()
     oss << "----------------------------------------\n";
     oss << "       Monitor Configuration File       \n";
     oss << "----------------------------------------\n";
-    oss << conf;
+    oss << *config;
     oss << "----------------------------------------";
 
     NebulaLog::log("MON", Log::INFO, oss);
@@ -121,9 +78,9 @@ void Monitor::start()
         long long    message_size;
         unsigned int timeout;
 
-        conf.get("ONE_XMLRPC", one_xmlrpc);
-        conf.get("MESSAGE_SIZE", message_size);
-        conf.get("TIMEOUT", timeout);
+        config->get("ONE_XMLRPC", one_xmlrpc);
+        config->get("MESSAGE_SIZE", message_size);
+        config->get("TIMEOUT", timeout);
 
         Client::initialize("", one_xmlrpc, message_size, timeout);
 
@@ -148,7 +105,7 @@ void Monitor::start()
     string db_name;
     int    connections;
 
-    const VectorAttribute * _db = conf.get("DB");
+    const VectorAttribute * _db = config->get("DB");
 
     if (_db != 0)
     {
@@ -164,7 +121,7 @@ void Monitor::start()
 
     if (db_backend_type == "sqlite")
     {
-        sqlDB.reset(new SqliteDB(var_location + "one.db"));
+        sqlDB.reset(new SqliteDB(get_var_location() + "one.db"));
     }
     else
     {
@@ -175,10 +132,37 @@ void Monitor::start()
     // Pools
     // -------------------------------------------------------------------------
     // int machines_limit = 100;
-    // conf.get("MAX_VM", machines_limit);
+    // config->get("MAX_VM", machines_limit);
 
     hpool.reset(new HostRPCPool(sqlDB.get()));
     vmpool.reset(new VMRPCPool(sqlDB.get()));
+
+    // -------------------------------------------------------------------------
+    // Drivers
+    // -------------------------------------------------------------------------
+    vector<const VectorAttribute *> drivers_conf;
+
+    config->get("DRIVER", drivers_conf);
+
+    dm.reset(new DriverManager());
+
+    if (dm->load_drivers(drivers_conf) != 0)
+    {
+        NebulaLog::log("MON", Log::ERROR, "Unable to load drivers configuration");
+        return;
+    }
+
+    dm->register_action(MonitorDriverMessages::UNDEFINED, std::bind(&Monitor::process_undefined, this, _1));
+    dm->register_action(MonitorDriverMessages::MONITOR_VM, std::bind(&Monitor::process_monitor_vm, this, _1));
+    dm->register_action(MonitorDriverMessages::MONITOR_HOST, std::bind(&Monitor::process_monitor_host, this, _1));
+    dm->register_action(MonitorDriverMessages::SYSTEM_HOST, std::bind(&Monitor::process_system_host, this, _1));
+    dm->register_action(MonitorDriverMessages::STATE_VM, std::bind(&Monitor::process_state_vm, this, _1));
+
+    if (dm->start() < 0)
+    {
+        NebulaLog::log("MON", Log::ERROR, "Unable to start DriverManager, exiting");
+        return;
+    }
 
     // -----------------------------------------------------------
     // Close stds, we no longer need them
@@ -250,6 +234,7 @@ void Monitor::start()
     //am.finalize();
 
     monitor_thread->join();
+    dm->stop();
 
     xmlCleanupParser();
 
@@ -270,27 +255,10 @@ void Monitor::thread_execute()
         NebulaLog::log("MON", Log::WARNING, "Received undefined message: " + ms->payload());
     });
 
-    using namespace std::placeholders; // for _1
     oned_reader.register_action(OpenNebulaMessages::ADD_HOST, std::bind(&Monitor::process_add_host, this, _1));
     oned_reader.register_action(OpenNebulaMessages::DEL_HOST, std::bind(&Monitor::process_del_host, this, _1));
     auto oned_msg_thread = std::thread(&one_stream_t::action_loop, &oned_reader, false);
     oned_msg_thread.detach();
-
-    // todo This initialization should be moved out of the thread, to the initialization phase
-    //      read drivers from config
-    driver_t driver("../test/mock_driver", "2");    // note mock_driver is not in the repository
-    driver.register_action(MonitorDriverMessages::UNDEFINED, std::bind(&Monitor::process_undefined, this, _1));
-    driver.register_action(MonitorDriverMessages::MONITOR_VM, std::bind(&Monitor::process_monitor_vm, this, _1));
-    driver.register_action(MonitorDriverMessages::MONITOR_HOST, std::bind(&Monitor::process_monitor_host, this, _1));
-    driver.register_action(MonitorDriverMessages::SYSTEM_HOST, std::bind(&Monitor::process_system_host, this, _1));
-    driver.register_action(MonitorDriverMessages::STATE_VM, std::bind(&Monitor::process_state_vm, this, _1));
-    std::string error;
-    if (driver.start(false, error) < 0)
-    {
-        NebulaLog::log("MON", Log::ERROR, "Unable to start monigor driver: " + error);
-        kill(0, SIGTERM);
-        return;
-    }
 
     while (!terminate)
     {
@@ -311,8 +279,6 @@ void Monitor::thread_execute()
 
         sleep(5);
     }
-
-    driver.stop();
 }
 
 /* -------------------------------------------------------------------------- */

@@ -40,14 +40,19 @@ public:
      *    @param c the command to execute the driver
      *    @param a the arguments for the command
      */
-    Driver(const std::string& c, const std::string& a):cmd(c), arg(a), pid(-1){};
+    Driver(const std::string& c, const std::string& a, bool threaded)
+        : cmd(c)
+        , arg(a)
+        , threaded(threaded)
+        , pid(-1)
+    {}
 
     /**
      *  Starts the driver and listener thread.
      *    @param error string
      *    @return 0 on success
      */
-    int start(bool threaded, std::string& error)
+    int start(std::string& error)
     {
         if ( start_driver(error) == -1 )
         {
@@ -107,6 +112,8 @@ private:
     std::string cmd;
 
     std::string arg;
+
+    bool        threaded;
 
     /**
      *  Process ID of the driver

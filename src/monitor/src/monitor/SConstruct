@@ -25,6 +25,7 @@ cwd=os.getcwd()
 # Build library
 lib_name='nebula_monitor'
 source_files=[
+    'DriverManager.cc',
     'Monitor.cc',
     'MonitorConfigTemplate.cc']
 mon_env.StaticLibrary(lib_name, source_files)

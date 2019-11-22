@@ -19,12 +19,14 @@
 
 #include <thread>
 
+#include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
 #include "OpenNebulaStream.h"
 #include "MonitorDriver.h"
+#include "DriverManager.h"
 
-class Monitor
+class Monitor : public NebulaService
 {
 public:
     void start();
@@ -55,7 +57,9 @@ private:
 
     std::unique_ptr<SqlDB> sqlDB;
 
+    std::unique_ptr<DriverManager> dm;
+
     bool terminate = false;
 };
 
-#endif
+#endif // MONITOR_H_
