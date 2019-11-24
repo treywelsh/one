@@ -245,15 +245,12 @@ int Host::update_info(Template        &tmpl,
                       bool            &with_vm_info,
                       set<int>        &lost,
                       map<int,string> &found,
-                      const set<int>  &non_shared_ds,
-                      const string    &reserved_cpu,
-                      const string    &reserved_mem)
+                      const set<int>  &non_shared_ds)
 {
     VectorAttribute*             vatt;
     vector<Attribute*>::iterator it;
     vector<Attribute*>           vm_att;
     vector<Attribute*>           ds_att;
-    vector<VectorAttribute*>     pci_att;
     vector<VectorAttribute*>     local_ds_att;
 
     int   rc;
@@ -295,12 +292,20 @@ int Host::update_info(Template        &tmpl,
     // -------------------------------------------------------------------------
     // Copy monitor, extract share info & update last_monitored and state
     // -------------------------------------------------------------------------
-
     obj_template->merge(&tmpl);
 
     touch(true);
 
-    host_share.set_capacity(this, reserved_cpu, reserved_mem);
+    string rcpu;
+    string rmem;
+
+    reserved_capacity(rcpu, rmem);
+
+    host_share.set_capacity_monitorization(*obj_template, rcpu, rmem);
+
+    host_share.set_pci_monitorization(*obj_template);
+
+    host_share.set_numa_monitorization(*obj_template);
 
     // -------------------------------------------------------------------------
     // Correlate VM information with the list of running VMs
@@ -463,11 +468,6 @@ int Host::update_info(Template        &tmpl,
 
     host_share.set_ds_monitorization(local_ds_att);
 
-    obj_template->remove("PCI", pci_att);
-
-    host_share.set_pci_monitorization(pci_att);
-
-    host_share.set_numa_monitorization(*obj_template);
 
     return 0;
 }
@@ -748,11 +748,15 @@ int Host::from_xml(const string& xml)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void Host::get_cluster_capacity(string& cluster_rcpu, string& cluster_rmem) const
+void Host::reserved_capacity(string& rcpu, string& rmem) const
 {
+    string cluster_rcpu = "";
+    string cluster_rmem = "";
+
     if (cluster_id != -1)
     {
         auto cpool = Nebula::instance().get_clpool();
+
         Cluster * cluster = cpool->get_ro(cluster_id);
 
         if (cluster != nullptr)
@@ -760,6 +764,19 @@ void Host::get_cluster_capacity(string& cluster_rcpu, string& cluster_rmem) cons
             cluster->get_reserved_capacity(cluster_rcpu, cluster_rmem);
             cluster->unlock();
         }
+    }
+
+    get_template_attribute("RESERVED_CPU", rcpu);
+    get_template_attribute("RESERVED_MEM", rmem);
+
+    if ( rcpu.empty() )
+    {
+        rcpu = cluster_rcpu;
+    }
+
+    if ( rmem.empty() )
+    {
+        rmem = cluster_rmem;
     }
 }
 
@@ -770,45 +787,29 @@ int Host::post_update_template(string& error)
 {
     string new_im_mad;
     string new_vm_mad;
-    string cpu_ids;
-
-    unsigned int vms_thread;
+    
+    string rcpu;
+    string rmem;
 
     get_template_attribute("IM_MAD", new_im_mad);
     get_template_attribute("VM_MAD", new_vm_mad);
 
-    if (new_im_mad != ""){
+    if (!new_im_mad.empty())
+    {
         im_mad_name = new_im_mad;
     }
 
-    if (new_im_mad != ""){
+    if (!new_im_mad.empty())
+    {
         vmm_mad_name = new_vm_mad;
     }
 
     replace_template_attribute("IM_MAD", im_mad_name);
     replace_template_attribute("VM_MAD", vmm_mad_name);
 
-    get_template_attribute("ISOLCPUS", cpu_ids);
+    reserved_capacity(rcpu, rmem);
 
-    string cluster_rcpu = "";
-    string cluster_rmem = "";
-    get_cluster_capacity(cluster_rcpu, cluster_rmem);
-
-    host_share.update_capacity(this, cluster_rcpu, cluster_rmem);
-
-    host_share.reserve_cpus(cpu_ids);
-
-    if ( get_template_attribute("VMS_THREAD", vms_thread) )
-    {
-        if ( vms_thread <= 0 )
-        {
-            vms_thread = 1;
-
-            replace_template_attribute("VMS_THREAD", 1);
-        }
-
-        host_share.set_vms_thread(vms_thread);
-    }
+    host_share.update_capacity(*obj_template, rcpu, rmem);
 
     return 0;
 };

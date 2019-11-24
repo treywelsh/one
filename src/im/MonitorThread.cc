@@ -133,10 +133,6 @@ void MonitorThread::do_message()
 
     int rc  = host->extract_ds_info(*hinfo, tmpl, datastores);
 
-    string reserved_cpu = "";
-    string reserved_mem = "";
-    host->get_cluster_capacity(reserved_cpu, reserved_mem);
-
     delete hinfo;
 
     host->unlock();
@@ -183,8 +179,7 @@ void MonitorThread::do_message()
 
     set<int> prev_rediscovered = host->get_prev_rediscovered_vms();
 
-    rc = host->update_info(tmpl, vm_poll, lost, found, non_shared_ds,
-                reserved_cpu, reserved_mem);
+    rc = host->update_info(tmpl, vm_poll, lost, found, non_shared_ds);
 
     if (rc != 0)
     {

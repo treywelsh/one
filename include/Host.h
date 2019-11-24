@@ -239,17 +239,13 @@ public:
      *    @param with_vm_info if monitoring contains VM information
      *    @param lost set of VMs that should be in the host and were not found
      *    @param found VMs running in the host (as expected) and info.
-     *    @param reserved_cpu from cluster defaults
-     *    @param reserved_mem from cluster defaults
      *    @return 0 on success
      **/
     int update_info(Template        &tmpl,
                     bool            &with_vm_info,
                     set<int>        &lost,
                     map<int,string> &found,
-                    const set<int>  &non_shared_ds,
-                    const string&   reserved_cpu,
-                    const string&   reserved_mem);
+                    const set<int>  &non_shared_ds);
     /**
      * Extracts the DS attributes from the given template
      * @param parse_str string with values to be parsed
@@ -344,21 +340,6 @@ public:
     {
         return last_monitored;
     };
-
-    /**
-     *  Get the reserved capacity for this host. Parameters will be only updated
-     *  if values are defined in the host. Reserved capacity will be subtracted
-     *  from the Host total capacity.
-     *    @param cpu reserved cpu (in percentage)
-     *    @param mem reserved mem (in KB)
-     */
-    void get_reserved_capacity(string& cpu, string& mem) const
-    {
-        get_template_attribute("RESERVED_CPU", cpu);
-        get_template_attribute("RESERVED_MEM", mem);
-    }
-
-    void get_cluster_capacity(string& cluster_rcpu, string& cluster_rmem) const;
 
     // -------------------------------------------------------------------------
     // Share functions.
@@ -544,6 +525,18 @@ private:
          const string& cluster_name);
 
     virtual ~Host() = default;
+
+
+    // *************************************************************************
+    // Helper functions
+    // *************************************************************************
+    /**
+     *  Gets the reserved capacity of this host, if not defined it will be used
+     *  the cluster one (if any)
+     *    @param rcpu reserved cpu
+     *    @param rmem reserved mem
+     */
+    void reserved_capacity(string& rcpu, string& rmem) const;
 
     // *************************************************************************
     // DataBase implementation (Private)
