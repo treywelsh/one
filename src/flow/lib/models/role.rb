@@ -28,6 +28,7 @@ module OpenNebula
 
     # Service Role class
     class Role
+        attr_reader :service
 
         # Actions that can be performed on the VMs of a given Role
         SCHEDULE_ACTIONS = %w[
@@ -273,8 +274,13 @@ module OpenNebula
         # @return [Array<true, nil>, Array<false, String>] true if all the VMs
         # were created, false and the error reason if there was a problem
         # creating the VMs
-        def deploy(scale_up=false)
-            n_nodes = cardinality() - nodes.size
+        def deploy(scale_up = false)
+            deployed_nodes = []
+            n_nodes = cardinality - nodes.size
+
+            File.open("/tmp/loga", "a") do |file|
+                file.write("n_nodes: #{n_nodes} (#{cardinality} #{nodes.size})\n")
+            end
 
             @body['last_vmname'] ||= 0
 
@@ -330,6 +336,8 @@ module OpenNebula
 
                 vm_id = template.instantiate(vm_name, false, extra_template)
 
+                deployed_nodes << vm_id
+
                 if OpenNebula.is_error?(vm_id)
                     msg = "Role #{name} : Instantiate failed for template #{template_id}; #{vm_id.message}"
                     Log.error LOG_COMP, msg, @service.id()
@@ -359,7 +367,7 @@ module OpenNebula
                 @body['nodes'] << node
             }
 
-            return [true, nil]
+            [deployed_nodes, nil]
         end
 
         # Terminate all the nodes in this role
@@ -661,31 +669,31 @@ module OpenNebula
         # @return [nil, OpenNebula::Error] nil in case of success, Error
         #   otherwise
         def update(template)
-
             force = template['force'] == true
-            new_cardinality = template["cardinality"]
+            new_cardinality = template['cardinality']
 
-            if new_cardinality.nil?
-                return nil
-            end
+            return if new_cardinality.nil?
 
             new_cardinality = new_cardinality.to_i
 
             if !force
-                if new_cardinality < min_cardinality().to_i
+                if new_cardinality < min_cardinality.to_i
                     return OpenNebula::Error.new(
-                        "Minimum cardinality is #{min_cardinality()}")
+                        "Minimum cardinality is #{min_cardinality}"
+                    )
 
-                elsif !max_cardinality().nil? && new_cardinality > max_cardinality().to_i
+                elsif !max_cardinality.nil? &&
+                      new_cardinality > max_cardinality.to_i
                     return OpenNebula::Error.new(
-                        "Maximum cardinality is #{max_cardinality()}")
+                        "Maximum cardinality is #{max_cardinality}"
+                    )
 
                 end
             end
 
             set_cardinality(new_cardinality)
 
-            return nil
+            nil
         end
 
         ########################################################################

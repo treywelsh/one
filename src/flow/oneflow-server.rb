@@ -363,6 +363,29 @@ post '/service/:id/role/:role_name/action' do
     body rc.to_json
 end
 
+post '/service/:id/scale' do
+    require 'pry'
+    binding.pry
+
+    call_body = JSON.parse(request.body.read)
+
+    service_id  = params[:id]
+    role_name   = call_body['role_name']
+    cardinality = call_body['cardinality'].to_i
+    force       = call_body['force']
+
+    # TODO, check valid state and service exist
+    lcm.am.trigger_action(:scale,
+                          service_id,
+                          service_id,
+                          role_name,
+                          cardinality,
+                          force)
+
+    status 201
+    body
+end
+
 ##############################################################################
 # Service Template
 ##############################################################################

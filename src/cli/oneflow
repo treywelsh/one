@@ -40,6 +40,7 @@ require 'cli_helper'
 require 'one_helper/onevm_helper'
 
 require 'json'
+require 'pry'
 
 USER_AGENT = 'CLI'
 
@@ -613,10 +614,11 @@ CommandParser::CmdParser.new(ARGV) do
         exit_code = 0
 
         json =  "{ \"cardinality\" : #{args[2]},\n" \
-                "  \"force\" : #{options[:force] == true} }"
+                "  \"force\" : #{options[:force] == true}, " \
+                "  \"role_name\" : \"#{args[1]}\"}"
 
         response = client
-                   .put("#{RESOURCE_PATH}/#{args[0]}/role/#{args[1]}", json)
+                   .post("#{RESOURCE_PATH}/#{args[0]}/scale", json)
 
         if CloudClient.is_error?(response)
             puts response.to_s

@@ -29,6 +29,7 @@ class ServiceLCM
         # Actions
         'DEPLOY'   => :deploy,
         'UNDEPLOY' => :undeploy,
+        'SCALE'    => :scale,
 
         # Callbacks
         'DEPLOY_CB'           => :deploy_cb,
@@ -50,6 +51,7 @@ class ServiceLCM
         @am.register_action(ACTIONS['UNDEPLOY'], method('undeploy_action'))
         @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
         @am.register_action(ACTIONS['UNDEPLOY_FAILURE_CB'], method('undeploy_failure_cb'))
+        @am.register_action(ACTIONS['SCALE'], method('scale_action'))
 
         Thread.new { @am.start_listener }
     end
@@ -85,26 +87,12 @@ class ServiceLCM
                 break
             end
 
-            service.set_state(Service::STATE['DEPLOYING'])
+            rc = deploy_roles(roles, 'DEPLOYING', 'FAILED_DEPLOYING', false)
 
-            roles.each do |_name, role|
-                rc = role.deploy
-
-                if !rc[0]
-                    service.set_state(Service::STATE['FAILED_DEPLOYING'])
-                    role.set_state(Role::STATE['FAILED_DEPLOYING'])
-                    service.update
-
-                    break
-                end
-
-                role.set_state(Role::STATE['DEPLOYING'])
-
-                @event_manager.trigger_action(:wait_deploy,
-                                              service.id,
-                                              service.id,
-                                              role.name,
-                                              role.nodes_ids)
+            if rc
+                service.set_state(Service::STATE['DEPLOYING'])
+            else
+                service.set_state(Service::STATE['FAILED_DEPLOYING'])
             end
 
             service.update
@@ -132,31 +120,50 @@ class ServiceLCM
                 break
             end
 
-            service.set_state(Service::STATE['UNDEPLOYING'])
+            rc = undeploy_roles(roles, 'UNDEPLOYING', 'FAILED_UNDEPLOYING')
 
-            roles.each do |_name, role|
-                rc = role.shutdown
-
-                if !rc[0]
-                    service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
-                    role.set_state(Role::STATE['FAILED_UNDEPLOYING'])
-                    service.update
-
-                    break
-                end
-
-                role.set_state(Role::STATE['UNDEPLOYING'])
-
-                @event_manager.trigger_action(:wait_undeploy,
-                                              service.id,
-                                              service.id,
-                                              role.name,
-                                              role.nodes_ids)
+            if rc
+                service.set_state(Service::STATE['UNDEPLOYING'])
+            else
+                service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
             end
 
             service.update
         end
 
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def scale_action(service_id, role_name, cardinality, force)
+        File.open("/tmp/loga", "a") do |file|
+            file.write("scale-action\n")
+        end
+        rc = @srv_pool.get(service_id) do |service|
+            # TODO, check service state know the resource is locked
+            rc = nil
+            role = service.roles[role_name]
+
+            cardinality_diff = cardinality - role.cardinality
+
+            set_cardinality(role, cardinality, force)
+
+            if cardinality_diff > 0
+                rc = deploy_roles({role_name => role}, 'SCALING', 'FAILED_SCALING', true)
+            elsif cardinality_diff < 0
+                rc = undeploy_roles({role_name => role}, 'SCALING', 'FAILED_SCALING')
+            end
+
+            if rc
+                service.set_state(Service::STATE['SCALING'])
+            else
+                service.set_state(Service::STATE['FAILED_SCALING'])
+            end
+
+            service.update
+        end
+        File.open("/tmp/loga", "a") do |file|
+            file.write("scale-action END\n")
+        end
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
@@ -242,6 +249,74 @@ class ServiceLCM
         else
             service.extend(Strategy)
         end
+    end
+
+    # Returns true if the deployments of all roles was fine and
+    # update their state consequently
+    # @param [Array<Role>] roles to be deployed
+    # @param [Role::STATE] success_state new state of the role if deployed successfuly
+    # @param [Role::STATE] error_state new state of the role if deployed unsuccessfuly
+    def deploy_roles(roles, success_state, error_state, scale)
+        File.open("/tmp/loga", "a") do |file|
+            file.write("deploy-roles\n")
+        end
+        roles.each do |_name, role|
+            rc = role.deploy scale
+
+            File.open("/tmp/loga", "a") do |file|
+                file.write("Deployed nodes: #{rc}\n")
+            end
+
+            if !rc[0]
+                role.set_state(Role::STATE[error_state])
+                return false
+            end
+
+            role.set_state(Role::STATE[success_state])
+
+            @event_manager.trigger_action(:wait_deploy,
+                                          role.service.id,
+                                          role.service.id,
+                                          role.name,
+                                          rc[0])
+        end
+
+        File.open("/tmp/loga", "a") do |file|
+            file.write("deploy-roles END\n")
+        end
+
+        true
+    end
+
+    def undeploy_roles(roles, success_state, error_state)
+        roles.each do |_name, role|
+            rc = role.shutdown
+
+            if !rc[0]
+                role.set_state(Role::STATE[error_state])
+                break
+            end
+
+            role.set_state(Role::STATE[success_state])
+
+            # TODO, take only subset of nodes which needs to be undeployed (new role.nodes_undeployed_ids ?)
+            @event_manager.trigger_action(:wait_undeploy,
+                                          role.service.id,
+                                          role.service.id,
+                                          role.name,
+                                          role.nodes_ids)
+        end
+    end
+
+    def set_cardinality(role, cardinality, force)
+        tmpl_json = "{ \"cardinality\" : #{cardinality},\n" \
+                    "  \"force\" : #{force} }"
+
+        rc = role.update(JSON.parse(tmpl_json))
+
+        return rc if OpenNebula.is_error?(rc)
+
+        nil
     end
 
 end
