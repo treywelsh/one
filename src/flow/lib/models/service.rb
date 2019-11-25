@@ -522,6 +522,10 @@ module OpenNebula
             vnets_failed
         end
 
+        def can_scale?
+            state == Service::STATE['RUNNING']
+        end
+
         private
 
         # Maximum number of log entries per service

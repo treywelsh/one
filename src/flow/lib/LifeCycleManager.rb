@@ -63,6 +63,7 @@ class ServiceLCM
     ############################################################################
     def deploy_action(service_id)
         rc = @srv_pool.get(service_id) do |service|
+            # Create vnets only first time action is called
             if service.state == Service::STATE['PENDING']
                 rc = service.deploy_networks
 
@@ -109,7 +110,10 @@ class ServiceLCM
 
             # If the service is in transient state,
             # stop current action before undeploying the service
-            @event_manager.cancel_action(service_id) if service.transient_state?
+            if service.transient_state?
+                @event_manager.cancel_action(service_id)
+                @am.cancel_action(service_id)
+            end
 
             roles = service.roles_shutdown
 
@@ -141,7 +145,14 @@ class ServiceLCM
 
     def scale_action(service_id, role_name, cardinality, force)
         rc = @srv_pool.get(service_id) do |service|
-            # TODO, check service state know the resource is locked
+            if !service.can_scale?
+                Log.error LOG_COMP, 'Failure scaling service. ' \
+                                    'Services cannot be scaled in ' \
+                                    "#{service.state_str} state."
+
+                break
+            end
+
             rc = nil
             role = service.roles[role_name]
 
