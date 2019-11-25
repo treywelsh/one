@@ -16,14 +16,14 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-$: << File.join(File.dirname(__FILE__), '../../../lib')
+$LOAD_PATH << File.join(File.dirname(__FILE__), '../../../lib')
 
 require 'pp'
 require 'rexml/document'
 require 'base64'
 require 'uri'
 
-require "poll_common"
+require 'poll_common'
 
 begin
     require 'rubygems'
@@ -34,8 +34,8 @@ rescue LoadError
     JSON_LOADED = false
 end
 
-ENV['LANG']='C'
-ENV['LC_ALL']='C'
+ENV['LANG'] = 'C'
+ENV['LC_ALL'] = 'C'
 
 ################################################################################
 #
@@ -43,8 +43,9 @@ ENV['LC_ALL']='C'
 #
 ################################################################################
 module KVM
+
     # Constants for KVM operations
-    CONF={
+    CONF = {
         :dominfo    => 'virsh --connect LIBVIRT_URI --readonly dominfo',
         :domstate   => 'virsh --connect LIBVIRT_URI --readonly domstate',
         :list       => 'virsh --connect LIBVIRT_URI --readonly list',
@@ -66,22 +67,22 @@ module KVM
     def self.get_vm_info(one_vm)
         dominfo = dom_info(one_vm)
 
-        return { :state => '-' } if !dominfo
+        return { :state => '-' } unless dominfo
 
         psinfo = process_info(dominfo['UUID'])
 
-        vm = Hash.new
+        vm = {}
 
         vm[:name] = one_vm
         vm[:pid]  = psinfo[1]
         vm[:reason] = dom_state_reason(one_vm)
 
-        cpu = get_cpu_info({one_vm => vm})
+        cpu = get_cpu_info(one_vm => vm)
 
         resident_mem = psinfo[5].to_i
         swap_mem     = get_swap_usage(vm[:pid]).to_i
 
-        values=Hash.new
+        values = {}
 
         values[:cpu]    = cpu[vm[:pid]] if cpu[vm[:pid]]
         values[:memory] = resident_mem + swap_mem
@@ -90,19 +91,19 @@ module KVM
 
         values.merge!(get_io_statistics(one_vm, xml))
 
-        return values
+        values
     end
 
     # Gets the information of all VMs
     #
     # @return [Hash, nil] Hash with the VM information or nil in case of error
     def self.get_all_vm_info
-        vms_info = Hash.new
-        vms      = Hash.new
+        vms_info = {}
+        vms      = {}
 
-        text=`#{virsh(:list)}`
+        text = `#{virsh(:list)}`
 
-        return nil if $?.exitstatus != 0
+        return if $CHILD_STATUS.exitstatus != 0
 
         lines = text.split(/\n/)[2..-1]
 
@@ -110,24 +111,24 @@ module KVM
             line.split(/\s+/).delete_if {|d| d.empty? }[1]
         end
 
-        return vms_info if names.length == 0
+        return vms_info if names.empty?
 
         names.each do |vm|
             dominfo = dom_info(vm)
 
-            if dominfo
-                psinfo = process_info(dominfo['UUID'])
+            next unless dominfo
 
-                info= Hash.new
+            psinfo = process_info(dominfo['UUID'])
 
-                info[:dominfo] = dominfo
-                info[:psinfo]  = psinfo
-                info[:name]    = vm
-                info[:pid]     = psinfo[1]
-                info[:reason]  = dom_state_reason(vm)
+            info = {}
 
-                vms[vm]=info
-            end
+            info[:dominfo] = dominfo
+            info[:psinfo]  = psinfo
+            info[:name]    = vm
+            info[:pid]     = psinfo[1]
+            info[:reason]  = dom_state_reason(vm)
+
+            vms[vm] = info
         end
 
         cpu = get_cpu_info(vms)
@@ -139,7 +140,7 @@ module KVM
             resident_mem = ps_data[5].to_i
             swap_mem     = get_swap_usage(vm[:pid]).to_i
 
-            values = Hash.new
+            values = {}
 
             values[:cpu]    = cpu[vm[:pid]] if cpu[vm[:pid]]
             values[:memory] = resident_mem + swap_mem
@@ -160,16 +161,16 @@ module KVM
             vms_info[vm[:name]] = values
         end
 
-        return vms_info
+        vms_info
     end
 
     def self.number_of_processors
-        %x{nproc}.to_i
+        `nproc`.to_i
     end
 
     def self.get_cpu_jiffies
         begin
-            stat = File.read("/proc/stat")
+            stat = File.read('/proc/stat')
         rescue
             return 0
         end
@@ -206,12 +207,12 @@ module KVM
     #   @param vms [Hash] of vms indexed by name. Value is a hash with :pid
     #   @return  [Hash] with ps information
     def self.get_cpu_info(vms)
-        pids = vms.map {|name, vm| vm[:pid] }
+        pids = vms.map {|_name, vm| vm[:pid] }
         pids.compact!
 
         multiplier = number_of_processors * 100
 
-        cpu = Hash.new
+        cpu = {}
 
         start_cpu_jiffies = get_cpu_jiffies
 
@@ -224,8 +225,8 @@ module KVM
         cpu_jiffies = get_cpu_jiffies - start_cpu_jiffies
 
         pids.each do |pid|
-            cpu[pid] = ( get_process_jiffies(pid) - cpu[pid] ) / cpu_jiffies
-            cpu[pid] = ( cpu[pid] * multiplier ).round(2)
+            cpu[pid] = (get_process_jiffies(pid) - cpu[pid]) / cpu_jiffies
+            cpu[pid] = (cpu[pid] * multiplier).round(2)
         end
 
         cpu
@@ -235,7 +236,7 @@ module KVM
     #   @param uid [String] with user id
     #   @return [Array] of user processes
     def self.process_info(uuid)
-        ps=`ps auxwww | grep -- '-uuid #{uuid}' | grep -v grep`
+        ps = `ps auxwww | grep -- '-uuid #{uuid}' | grep -v grep`
         ps.split(/\s+/)
     end
 
@@ -243,8 +244,8 @@ module KVM
     #   @param pid [String] process id
     #   @return [Integer] of swap allocation of given process
     def self.get_swap_usage(pid)
-        swap=`cat /proc/#{pid}/status 2>/dev/null | grep VmSwap`
-        swap.split()[1] || 0
+        swap = `cat /proc/#{pid}/status 2>/dev/null | grep VmSwap`
+        swap.split[1] || 0
     end
 
     # Gets the info of a domain by its id
@@ -268,10 +269,10 @@ module KVM
     def self.dom_info(vmid)
         text = `#{virsh(:dominfo)} #{vmid} 2>/dev/null`
 
-        return nil if $?.exitstatus != 0
+        return if $CHILD_STATUS.exitstatus != 0
 
         lines = text.split(/\n/)
-        hash  = Hash.new
+        hash  = {}
 
         lines.map do |line|
             parts = line.split(/:\s+/)
@@ -289,10 +290,10 @@ module KVM
     #   paused (user)
     def self.dom_state_reason(vmid)
         text = `#{virsh(:domstate)} #{vmid} --reason 2>/dev/null`
-        return nil if $?.exitstatus != 0
+        return if $CHILD_STATUS.exitstatus != 0
 
         text =~ /^[^ ]+ \(([^)]+)\)/
-        return $1 || 'missing'
+        Regexp.last_match(1) || 'missing'
     end
 
     # Get dumpxml output of a VM
@@ -302,34 +303,33 @@ module KVM
         `#{virsh(:dumpxml)} '#{vmid}' 2>/dev/null`
     end
 
-    def self.get_io_statistics(vmid, text = nil)
-        vm_stats=`#{virsh(:domstats)} #{vmid}`
+    def self.get_io_statistics(vmid, _text = nil)
+        vm_stats = `#{virsh(:domstats)} #{vmid}`
 
-        values={}
+        values = {}
         values[:netrx] = 0
         values[:nettx] = 0
-        values[:diskrdbytes]=0
-        values[:diskwrbytes]=0
-        values[:diskrdiops]=0
-        values[:diskwriops]=0
-
+        values[:diskrdbytes] = 0
+        values[:diskwrbytes] = 0
+        values[:diskrdiops] = 0
+        values[:diskwriops] = 0
 
         vm_stats.each_line do |line|
-            columns=line.split(/=(\d+)/)
+            columns = line.split(/=(\d+)/)
             case columns[0]
             when /rx.bytes/
-                values[:netrx]+=columns[1].to_i
+                values[:netrx] += columns[1].to_i
             when /tx.bytes/
-                values[:nettx]+=columns[1].to_i
+                values[:nettx] += columns[1].to_i
             when /rd.bytes/
-                values[:diskrdbytes]+=columns[1].to_i
+                values[:diskrdbytes] += columns[1].to_i
             when /wr.bytes/
-                values[:diskwrbytes]+=columns[1].to_i
+                values[:diskwrbytes] += columns[1].to_i
             when /rd.reqs/
-                values[:diskrdiops]+=columns[1].to_i
+                values[:diskrdiops] += columns[1].to_i
             when /wr.reqs/
-                values[:diskwriops]+=columns[1].to_i
-           end
+                values[:diskwriops] += columns[1].to_i
+            end
         end
 
         values
@@ -347,68 +347,66 @@ module KVM
         memory = REXML::XPath.first(doc, '/domain/memory').text.to_i / 1024
         arch = REXML::XPath.first(doc, '/domain/os/type').attributes['arch']
 
-=begin
-        disks = []
-        REXML::XPath.each(doc, '/domain/devices/disk') do |d|
-            type = REXML::XPath.first(d, '//disk').attributes['type']
-            driver = REXML::XPath.first(d, '//disk/driver').attributes['type']
-            source = REXML::XPath.first(d, '//disk/source').attributes[type]
-            target = REXML::XPath.first(d, '//disk/target').attributes['dev']
-
-            disks << {
-                :type => type,
-                :driver => driver,
-                :source => source,
-                :target => target
-            }
-        end
-
-        disks_txt = ''
-
-        disks.each do |disk|
-            disks_txt << "DISK=[\n"
-            disks_txt << "  SOURCE=\"#{disk[:source]}\",\n"
-            disks_txt << "  DRIVER=\"#{disk[:driver]}\",\n"
-            disks_txt << "  TARGET=\"#{disk[:target]}\""
-            disks_txt << "]\n"
-        end
-
-
-        interfaces = []
-        REXML::XPath.each(doc,
-                "/domain/devices/interface[@type='bridge']") do |i|
-            mac = REXML::XPath.first(i, '//interface/mac').
-                attributes['address']
-            bridge = REXML::XPath.first(i, '//interface/source').
-                attributes['bridge']
-            model = REXML::XPath.first(i, '//interface/model').
-                attributes['type']
-
-            interfaces << {
-                :mac => mac,
-                :bridge => bridge,
-                :model => model
-            }
-        end
-
-        interfaces_txt = ''
-
-        interfaces.each do |interface|
-            interfaces_txt << "NIC=[\n"
-            interfaces_txt << "  MAC=\"#{interface[:mac]}\",\n"
-            interfaces_txt << "  BRIDGE=\"#{interface[:bridge]}\",\n"
-            interfaces_txt << "  MODEL=\"#{interface[:model]}\""
-            interfaces_txt << "]\n"
-        end
-=end
+        #         disks = []
+        #         REXML::XPath.each(doc, '/domain/devices/disk') do |d|
+        #             type = REXML::XPath.first(d, '//disk').attributes['type']
+        #             driver = REXML::XPath.first(d, '//disk/driver').attributes['type']
+        #             source = REXML::XPath.first(d, '//disk/source').attributes[type]
+        #             target = REXML::XPath.first(d, '//disk/target').attributes['dev']
+        #
+        #             disks << {
+        #                 :type => type,
+        #                 :driver => driver,
+        #                 :source => source,
+        #                 :target => target
+        #             }
+        #         end
+        #
+        #         disks_txt = ''
+        #
+        #         disks.each do |disk|
+        #             disks_txt << "DISK=[\n"
+        #             disks_txt << "  SOURCE=\"#{disk[:source]}\",\n"
+        #             disks_txt << "  DRIVER=\"#{disk[:driver]}\",\n"
+        #             disks_txt << "  TARGET=\"#{disk[:target]}\""
+        #             disks_txt << "]\n"
+        #         end
+        #
+        #
+        #         interfaces = []
+        #         REXML::XPath.each(doc,
+        #                 "/domain/devices/interface[@type='bridge']") do |i|
+        #             mac = REXML::XPath.first(i, '//interface/mac').
+        #                 attributes['address']
+        #             bridge = REXML::XPath.first(i, '//interface/source').
+        #                 attributes['bridge']
+        #             model = REXML::XPath.first(i, '//interface/model').
+        #                 attributes['type']
+        #
+        #             interfaces << {
+        #                 :mac => mac,
+        #                 :bridge => bridge,
+        #                 :model => model
+        #             }
+        #         end
+        #
+        #         interfaces_txt = ''
+        #
+        #         interfaces.each do |interface|
+        #             interfaces_txt << "NIC=[\n"
+        #             interfaces_txt << "  MAC=\"#{interface[:mac]}\",\n"
+        #             interfaces_txt << "  BRIDGE=\"#{interface[:bridge]}\",\n"
+        #             interfaces_txt << "  MODEL=\"#{interface[:model]}\""
+        #             interfaces_txt << "]\n"
+        #         end
 
         spice = REXML::XPath.first(doc,
-            "/domain/devices/graphics[@type='spice']")
+                                   "/domain/devices/graphics[@type='spice']")
         spice = spice.attributes['port'] if spice
 
         spice_txt = ''
         if spice
-            spice_txt = %Q<GRAPHICS = [ TYPE="spice", PORT="#{spice}" ]>
+            spice_txt = %(GRAPHICS = [ TYPE="spice", PORT="#{spice}" ])
         end
 
         vnc = REXML::XPath.first(doc, "/domain/devices/graphics[@type='vnc']")
@@ -416,11 +414,10 @@ module KVM
 
         vnc_txt = ''
         if vnc
-            vnc_txt = %Q<GRAPHICS = [ TYPE="vnc", PORT="#{vnc}" ]>
+            vnc_txt = %(GRAPHICS = [ TYPE="vnc", PORT="#{vnc}" ])
         end
 
-
-        feature_list = %w{acpi apic pae}
+        feature_list = %w[acpi apic pae]
         features = []
 
         feature_list.each do |feature|
@@ -431,13 +428,12 @@ module KVM
 
         feat = []
         features.each do |feature|
-            feat << %Q[  #{feature.upcase}="yes"]
+            feat << %(  #{feature.upcase}="yes")
         end
 
         features_txt = "FEATURES=[\n"
         features_txt << feat.join(",\n")
         features_txt << "]\n"
-
 
         template = <<EOT
 NAME="#{name}"
@@ -452,8 +448,9 @@ OS=[ARCH="#{arch}"]
 #{vnc_txt}
 EOT
 
-        return uuid, template
+        [uuid, template]
     end
+
 end
 
 ################################################################################
@@ -462,7 +459,7 @@ end
 
 hypervisor = KVM
 file       = '../../../../etc/vmm/kvm/kvmrc'
-vars       = %w{LIBVIRT_URI}
+vars       = %w[LIBVIRT_URI]
 
 load_vars(hypervisor, file, vars)
 
