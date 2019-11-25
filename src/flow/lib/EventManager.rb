@@ -27,7 +27,8 @@ class EventManager
 
     ACTIONS = {
         'WAIT_DEPLOY' => :wait_deploy,
-        'WAIT_UNDEPLOY' => :wait_undeploy
+        'WAIT_UNDEPLOY' => :wait_undeploy,
+        'WAIT_COOLDOWN' => :wait_cooldown
     }
 
     FAILURE_STATES = %w[
@@ -69,6 +70,7 @@ class EventManager
         # Register Action Manager actions
         @am.register_action(ACTIONS['WAIT_DEPLOY'], method('wait_deploy_action'))
         @am.register_action(ACTIONS['WAIT_UNDEPLOY'], method('wait_undeploy_action'))
+        @am.register_action(ACTIONS['WAIT_COOLDOWN'], method('wait_cooldown'))
 
         Thread.new { @am.start_listener }
     end
@@ -101,6 +103,19 @@ class EventManager
 
         @lcm.trigger_action(:undeploy_cb, service_id, service_id, role_name) if rc
         @lcm.trigger_action(:undeploy_faillure_cb, service_id, service_id, role_name) unless rc
+    end
+
+    # Wait for nodes to be in DONE
+    # @param [service_id] the service id
+    # @param [role_name] the role name of the role which contains the VMs
+    # @param [nodes] the list of nodes (VMs) to wait for
+    def wait_cooldown(service_id, role_name, cooldown_time)
+        Log.info LOG_COMP, "Waiting #{cooldown_time}s for cooldown for " \
+                           "service #{service_id} and role #{role_name}."
+
+        sleep cooldown_time
+
+        @lcm.trigger_action(:cooldown_cb, service_id, service_id, role_name)
     end
 
     private

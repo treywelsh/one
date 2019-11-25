@@ -35,7 +35,8 @@ class ServiceLCM
         'DEPLOY_CB'           => :deploy_cb,
         'DEPLOY_FAILURE_CB'   => :deploy_faillure_cb,
         'UNDEPLOY_CB'         => :undeploy_cb,
-        'UNDEPLOY_FAILURE_CB' => :UNdeploy_faillure_cb
+        'UNDEPLOY_FAILURE_CB' => :undeploy_faillure_cb,
+        'COOLDOWN_CB'         => :cooldown_cb
     }
 
     def initialize(concurrency, cloud_auth)
@@ -52,6 +53,7 @@ class ServiceLCM
         @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
         @am.register_action(ACTIONS['UNDEPLOY_FAILURE_CB'], method('undeploy_failure_cb'))
         @am.register_action(ACTIONS['SCALE'], method('scale_action'))
+        @am.register_action(ACTIONS['COOLDOWN_CB'], method('cooldown_cb'))
 
         Thread.new { @am.start_listener }
     end
@@ -148,9 +150,14 @@ class ServiceLCM
             set_cardinality(role, cardinality, force)
 
             if cardinality_diff > 0
-                rc = deploy_roles({role_name => role}, 'SCALING', 'FAILED_SCALING', true)
+                rc = deploy_roles({ role_name => role },
+                                  'SCALING',
+                                  'FAILED_SCALING',
+                                  true)
             elsif cardinality_diff < 0
-                rc = undeploy_roles({role_name => role}, 'SCALING', 'FAILED_SCALING')
+                rc = undeploy_roles({ role_name => role },
+                                    'SCALING',
+                                    'FAILED_SCALING')
             end
 
             if rc
@@ -173,6 +180,19 @@ class ServiceLCM
 
     def deploy_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
+            if service.roles[role_name].state == Service::STATE['SCALING']
+                service.set_state(Service::STATE['COOLDOWN'])
+                service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
+                @event_manager.trigger_action(:wait_cooldown,
+                                              service.id,
+                                              service.id,
+                                              role_name,
+                                              10) # TOO, config time
+                service.update
+
+                break
+            end
+
             service.roles[role_name].set_state(Role::STATE['RUNNING'])
 
             if service.all_roles_running?
@@ -232,6 +252,17 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
+    def cooldown_cb(service_id, role_name)
+        rc = @srv_pool.get(service_id) do |service|
+            service.set_state(Service::STATE['RUNNING'])
+            service.roles[role_name].set_state(Role::STATE['RUNNING'])
+
+            service.update
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
     ############################################################################
     # Helpers
     ############################################################################
@@ -254,12 +285,11 @@ class ServiceLCM
     # Returns true if the deployments of all roles was fine and
     # update their state consequently
     # @param [Array<Role>] roles to be deployed
-    # @param [Role::STATE] success_state new state of the role if deployed successfuly
-    # @param [Role::STATE] error_state new state of the role if deployed unsuccessfuly
+    # @param [Role::STATE] success_state new state of the role
+    #                      if deployed successfuly
+    # @param [Role::STATE] error_state new state of the role
+    #                      if deployed unsuccessfuly
     def deploy_roles(roles, success_state, error_state, scale)
-        File.open("/tmp/loga", "a") do |file|
-            file.write("deploy-roles\n")
-        end
         roles.each do |_name, role|
             rc = role.deploy scale
 
@@ -279,10 +309,6 @@ class ServiceLCM
                                           role.service.id,
                                           role.name,
                                           rc[0])
-        end
-
-        File.open("/tmp/loga", "a") do |file|
-            file.write("deploy-roles END\n")
         end
 
         true

@@ -364,9 +364,6 @@ post '/service/:id/role/:role_name/action' do
 end
 
 post '/service/:id/scale' do
-    require 'pry'
-    binding.pry
-
     call_body = JSON.parse(request.body.read)
 
     service_id  = params[:id]
