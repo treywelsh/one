@@ -39,22 +39,17 @@ class CollectdClient
         @last_update = last_update
     end
 
-    def send(data, socket, secure = true)
+    def send(data, protocol, secure = true)
         message, code = data
         code ? result = 'SUCCESS' : result = 'FAILURE'
 
         message = "MONITOR #{result} #{@retries} #{message}\n"
         message = encrypt(message) if secure == true
 
-        socket.send(message, 0) # TODO: Encrypt 0 ?
-    end
-
-    # TODO: Send if != DB info
-    def optsend(data, protocol)
         socket = @socket_udp
         socket = @socket_tcp if protocol == 'tcp'
 
-        send(data, socket) unless db_match(data)
+        socket.send(message, 0)
     end
 
     # Runs the specifed probes and sends the data
@@ -64,7 +59,7 @@ class CollectdClient
         exit 0 if stop?
 
         data = run_probes(probes, push_period)
-        client.optsend(data, protocol)
+        client.send(data, protocol, cache)
 
         # Sleep during the Cycle
         happened = (Time.now - before).to_i
@@ -132,12 +127,6 @@ class CollectdClient
         [data64, code]
     end
 
-    # TODO: Compare with DB before send
-    # Returns true if data matches local DB info
-    def db_match(_data)
-        false
-    end
-
     def ipv4_address(host)
         addresses = Resolv.getaddresses(host)
         address = nil
@@ -156,7 +145,6 @@ class CollectdClient
         address
     end
 
-    # TODO: Encript socket
     def open_sockets(host, port)
         ip = ipv4_address(host)
 
