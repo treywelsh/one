@@ -16,7 +16,7 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-$: << File.join(File.dirname(__FILE__), '../lib')
+$: << File.join(File.dirname(__FILE__), '../../../lib')
 
 require 'pp'
 require 'rexml/document'
@@ -83,7 +83,6 @@ module KVM
 
         values=Hash.new
 
-        values[:state]  = get_state(dominfo['State'], vm[:reason])
         values[:cpu]    = cpu[vm[:pid]] if cpu[vm[:pid]]
         values[:memory] = resident_mem + swap_mem
 
@@ -142,7 +141,6 @@ module KVM
 
             values = Hash.new
 
-            values[:state]  = get_state(dominfo['State'], vm[:reason])
             values[:cpu]    = cpu[vm[:pid]] if cpu[vm[:pid]]
             values[:memory] = resident_mem + swap_mem
 
@@ -337,38 +335,6 @@ module KVM
         values
     end
 
-    # Translate libvirt state to Opennebula monitor state
-    #  @param state [String] libvirt state
-    #  @return [String] OpenNebula state
-    #
-    # Libvirt states for the guest are
-    #  * 'running' state refers to guests which are currently active on a CPU.
-    #  * 'idle' ('blocked') not running or runnable (waiting on I/O or in a sleep mode).
-    #  * 'paused' after virsh suspend.
-    #  * 'in shutdown' ('shutdown') guest in the process of shutting down.
-    #  * 'dying' the domain has not completely shutdown or crashed.
-    #  * 'crashed' guests have failed while running and are no longer running.
-    #  * 'pmsuspended' suspended by guest power management (e.g. S3 state)
-    def self.get_state(state, reason='missing')
-        case state.gsub('-', '')
-            when 'running', 'idle', 'blocked', 'in shutdown', 'shutdown', 'dying'
-                'a'
-            when 'paused'
-                case reason
-                    when 'migrating'
-                        'a'
-                    when 'I/O error', 'watchdog', 'crashed', 'post-copy failed', 'user', 'unknown'
-                        'e'
-                    else
-                        'a'
-                end
-            when 'crashed', 'pmsuspended'
-                'e'
-            else
-                '-'
-        end
-    end
-
     # Convert the output of dumpxml to an OpenNebula template
     #   @param xml [String] output of dumpxml
     #   @return [Array] uuid and OpenNebula template encoded in base64
@@ -495,17 +461,9 @@ end
 ################################################################################
 
 hypervisor = KVM
-file       = '../../etc/vmm/kvm/kvmrc'
+file       = '../../../../etc/vmm/kvm/kvmrc'
 vars       = %w{LIBVIRT_URI}
 
 load_vars(hypervisor, file, vars)
 
-vm_id = ARGV[0]
-
-if vm_id == '-t'
-    print_all_vm_template(hypervisor)
-elsif vm_id
-    print_one_vm_info(hypervisor, vm_id)
-else
-    print_all_vm_info(hypervisor)
-end
+print_all_vm_template(hypervisor)

@@ -16,11 +16,11 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-$LOAD_PATH.unshift File.dirname(__FILE__)
+$LOAD_PATH.unshift File.dirname("#{__FILE__}../../../../vmm/lxd/")
 
 require 'container'
 require 'client'
-require_relative '../lib/poll_common'
+require_relative '../../../lib/poll_common'
 
 require 'base64'
 
@@ -41,13 +41,10 @@ module LXD
         def get_vm_info(one_vm)
             vm = Container.get(one_vm, nil, CLIENT)
 
-            return '-' unless vm
+            return { :state => '-' } unless vm
 
-            vm_info = get_values([vm]).first.last
-
-            vm_info
+            get_values([vm]).first.last
         end
-
 
         # Gets the information of all VMs
         #
@@ -58,29 +55,6 @@ module LXD
             return unless vms
 
             get_values(vms)
-        end
-
-        def get_all_vm_status
-            vms = Container.get_all(CLIENT)
-
-            return unless vms
-
-            # TODO: Deduplicate with get_values
-            vms_info = {}
-
-            vms.each do |container|
-                values = {}
-                name = container.name
-                values[:state] = get_state(container)
-
-                unless name =~ /^one-\d+/ # Wild VMs
-                    template = to_one(container)
-                    values[:template] = Base64.encode64(template).delete("\n")
-                    values[:vm_name] = name
-                end
-
-                vms_info[name] = values
-                vms_info
         end
 
         def get_values(vms)
@@ -118,40 +92,6 @@ module LXD
             end
 
             vms_info
-        end
-
-        # Get and translate LXD state to Opennebula monitor state
-        #  @param state [String] libvirt state
-        #  @return [String] OpenNebula state
-        #
-        # LXD states for the guest are
-        #  * 'running' state refers to containers which are currently active.
-        #  * 'frozen' after lxc freeze (suspended).
-        #  * 'stopped' container not running or in the process of shutting down.
-        #  * 'failure' container have failed.
-        def get_state(container)
-            begin
-                status = container.status.downcase
-            rescue StandardError
-                status = 'unknown'
-            end
-
-            case status
-            when 'running'
-                state = 'a'
-            when 'frozen'
-                state = 'p'
-            when 'stopped'
-                state = 'd'
-
-                state = '-' if container.config['user.one_status'] == '0'
-            when 'failure'
-                state = 'e'
-            else
-                state = '-'
-            end
-
-            state
         end
 
         def lxc_path(vm_name)
@@ -290,17 +230,4 @@ end
 # MAIN PROGRAM
 ################################################################################
 
-hypervisor = LXD
-
-vm_id = ARGV[0]
-
-case vm_id
-when '-t'
-    print_all_vm_template(hypervisor, 'monitor')
-when '-s'
-    print_all_vm_template(hypervisor, 'status')
-when vm_id
-val    print_one_vm_info(hypervisor, vm_id)
-else
-    print_all_vm_info(hypervisor)
-end
+print_all_vm_template(LXD)

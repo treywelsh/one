@@ -25,20 +25,18 @@
 # @param file [String] Name of the configuration file
 # @param vars [Array] Array of variables to read
 def load_vars(hypervisor, file, vars)
-    begin
-        env   = `. #{File.dirname($0)+"/#{file}"};env`
-        lines = env.split("\n")
+    env   = `. #{File.dirname($PROGRAM_NAME) + "/#{file}"};env`
+    lines = env.split("\n")
 
-        vars.each do |var|
-            lines.each do |line|
-                if a = line.match(/^(#{var})=(.*)$/)
-                    hypervisor::CONF[var] = a[2]
-                    break
-                end
+    vars.each do |var|
+        lines.each do |line|
+            if a = line.match(/^(#{var})=(.*)$/)
+                hypervisor::CONF[var] = a[2]
+                break
             end
         end
-    rescue
     end
+rescue
 end
 
 # Returns an OpenNebula monitor string
@@ -46,19 +44,19 @@ end
 # @param value [String] of the monitor metric
 # @return [String, nil]
 def print_data(name, value)
-    return nil if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+    return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
 
     if value.instance_of? Array
-        data_str = ""
+        data_str = ''
         value.each do |v|
             data_str += print_data(name, v)
         end
 
         return data_str
     elsif value.instance_of? Hash
-        values = value.map do |k,v|
+        values = value.map do |k, v|
             "#{k.to_s.upcase}=#{v}"
-        end.join(", ")
+        end.join(', ')
 
         return "#{name.to_s.upcase}=[ #{values} ] "
     else
@@ -73,7 +71,7 @@ end
 def print_one_vm_info(hypervisor, vm_id)
     info = hypervisor.get_vm_info(vm_id)
 
-    exit(-1) if !info
+    exit(-1) unless info
 
     values = info.map do |key, value|
         print_data(key, value)
@@ -88,42 +86,56 @@ def print_all_vm_info(hypervisor)
 
     vms = hypervisor.get_all_vm_info
 
-    return nil if vms.nil?
+    return if vms.nil?
 
     compressed = Zlib::Deflate.deflate(vms.to_yaml)
 
     puts Base64.encode64(compressed).delete("\n")
 end
 
-def print_all_vm_template(hypervisor, information)
-    vms = nil
+def print_all_vm_template(hypervisor)
+    vms = hypervisor.get_all_vm_template
 
-    if information == 'status'
-        vms = hypervisor.get_all_vm_status
-    else
-        vms = hypervisor.get_all_vm_info
-    end
+    return if vms.nil?
 
-    return nil if vms.nil?
+    template, data = vm_info(hypervisor)
 
-    puts "VM_POLL=YES"
+    puts 'VM_POLL=YES'
 
+    template << "  POLL=\"#{data}\" ]"
+
+    puts template
+end
+
+def print_all_vm_status(hypervisor)
+    vms = hypervisor.get_all_vm_status
+
+    return if vms.nil?
+
+    template, data = vm_info(hypervisor)
+
+    puts 'VM_STATUS=YES'
+
+    template << "  STATUS=\"#{data}\" ]"
+
+    puts template
+end
+
+def vm_info(vms)
     vms.each do |name, data|
         number = -1
 
-        if (name =~ /^one-\d*$/)
+        if name =~ /^one-\d*$/
             number = name.split('-').last
         end
 
-        vm_name = data[:vm_name]
-
-        string  = "VM=[\n"
+        string =  "VM=[\n"
         string << "  ID=#{number},\n"
         string << "  DEPLOY_ID=#{name},\n"
-        string << %Q(  VM_NAME="#{vm_name}",\n) if vm_name
+        string << %(  VM_NAME="#{data[:vm_name]}",\n) if data[:vm_name]
 
         if data[:template]
-            string << %Q(  IMPORT_TEMPLATE="#{data[:template]}",\n)
+            string << %(  IMPORT_TEMPLATE="#{data[:template]}",\n)
             data.delete(:template)
         end
 
@@ -131,10 +143,6 @@ def print_all_vm_template(hypervisor, information)
             print_data(key, value)
         end
 
-        monitor = values.zip.join(' ')
-
-        string << "  POLL=\"#{monitor}\" ]"
-
-        puts string
+        return [string, values.zip.join(' ')]
     end
 end
