@@ -26,6 +26,7 @@ source_files=[
     'HostShare.cc',
     'HostSharePCI.cc',
     'HostShareNUMA.cc',
+    'HostShareDatastore.cc',
     'HostPool.cc',
     'HostTemplate.cc'
 ]

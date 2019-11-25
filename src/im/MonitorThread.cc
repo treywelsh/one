@@ -121,43 +121,35 @@ void MonitorThread::do_message()
     }
 
     // -------------------------------------------------------------------------
-    // Get DS Information from Moniroting Information & Reserved Capacity
+    // Parse Moniroting Information
     // -------------------------------------------------------------------------
-    map<int,const VectorAttribute*>            datastores;
-    map<int, const VectorAttribute*>::iterator itm;
+    Template tmpl;
+    char*    error_msg;
 
-    Template    tmpl;
-    Datastore * ds;
+    if ( tmpl.parse(*hinfo, &error_msg) != 0 )
+    {
+        ostringstream ess;
 
-    set<int>    non_shared_ds;
+        ess << "Error parsing host " << host->get_oid() << " information: " 
+            << error_msg << ". Monitoring information: " << endl << *hinfo;
 
-    int rc  = host->extract_ds_info(*hinfo, tmpl, datastores);
+        NebulaLog::log("ONE", Log::ERROR, ess);
+
+        host->touch(false);
+
+        host->set_template_error_message("Error parsing monitor information."
+            " Check oned.log for more details.");
+
+        free(error_msg);
+
+        delete hinfo;
+
+        return;
+    }
 
     delete hinfo;
 
     host->unlock();
-
-    if (rc != 0)
-    {
-        return;
-    }
-
-    for (itm = datastores.begin(); itm != datastores.end(); itm++)
-    {
-        ds = dspool->get_ro(itm->first);
-
-        if (ds == 0)
-        {
-            continue;
-        }
-
-        if (ds->get_type() == Datastore::SYSTEM_DS && !ds->is_shared())
-        {
-            non_shared_ds.insert(itm->first);
-        }
-
-        ds->unlock();
-    }
 
     // -------------------------------------------------------------------------
     // Parse Host information
@@ -179,9 +171,7 @@ void MonitorThread::do_message()
 
     set<int> prev_rediscovered = host->get_prev_rediscovered_vms();
 
-    rc = host->update_info(tmpl, vm_poll, lost, found, non_shared_ds);
-
-    if (rc != 0)
+    if (host->update_info(tmpl, vm_poll, lost, found) != 0)
     {
         host->unlock();
 

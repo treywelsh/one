@@ -183,75 +183,14 @@ error_common:
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-int Host::extract_ds_info(
-            string          &parse_str,
-            Template        &tmpl,
-            map<int, const VectorAttribute*> &ds)
-{
-    char * error_msg;
-    int    rc;
-
-    vector<const VectorAttribute*> ds_att;
-    vector<const VectorAttribute*>::const_iterator it;
-
-    // -------------------------------------------------------------------------
-    // Parse Template
-    // -------------------------------------------------------------------------
-    rc = tmpl.parse(parse_str, &error_msg);
-
-    if ( rc != 0 )
-    {
-        ostringstream ess;
-
-        ess << "Error parsing host " << oid << " information: " << error_msg
-            << ". Monitoring information: " << endl << parse_str;
-
-        NebulaLog::log("ONE", Log::ERROR, ess);
-
-        touch(false);
-
-        set_template_error_message("Error parsing monitor information."
-            " Check oned.log for more details.");
-
-        free(error_msg);
-
-        return -1;
-    }
-
-    // -------------------------------------------------------------------------
-    // Get DS information
-    // -------------------------------------------------------------------------
-    tmpl.get("DS", ds_att);
-
-    for (it = ds_att.begin(); it != ds_att.end(); it++)
-    {
-        int dsid;
-
-        rc = (*it)->vector_value("ID", dsid);
-
-        if (rc == 0 && dsid != -1)
-        {
-            ds.insert(make_pair(dsid, *it));
-        }
-    }
-
-    return 0;
-}
-
-/* ------------------------------------------------------------------------ */
-/* ------------------------------------------------------------------------ */
-
 int Host::update_info(Template        &tmpl,
                       bool            &with_vm_info,
                       set<int>        &lost,
-                      map<int,string> &found,
-                      const set<int>  &non_shared_ds)
+                      map<int,string> &found)
 {
     VectorAttribute*             vatt;
     vector<Attribute*>::iterator it;
     vector<Attribute*>           vm_att;
-    vector<Attribute*>           ds_att;
-    vector<VectorAttribute*>     local_ds_att;
 
     int   rc;
     int   vmid;
@@ -301,11 +240,7 @@ int Host::update_info(Template        &tmpl,
 
     reserved_capacity(rcpu, rmem);
 
-    host_share.set_capacity_monitorization(*obj_template, rcpu, rmem);
-
-    host_share.set_pci_monitorization(*obj_template);
-
-    host_share.set_numa_monitorization(*obj_template);
+    host_share.set_monitorization(*obj_template, rcpu, rmem);
 
     // -------------------------------------------------------------------------
     // Correlate VM information with the list of running VMs
@@ -435,39 +370,6 @@ int Host::update_info(Template        &tmpl,
         add_template_attribute("TOTAL_ZOMBIES", num_zombies);
         add_template_attribute("ZOMBIES", zombie.str());
     }
-
-    // -------------------------------------------------------------------------
-    // Copy system datastore monitorization (non_shared) to host share
-    // -------------------------------------------------------------------------
-
-    obj_template->remove("DS", ds_att);
-
-    for (it = ds_att.begin(); it != ds_att.end(); it++)
-    {
-        int dsid;
-
-        vatt = dynamic_cast<VectorAttribute*>(*it);
-
-        if (vatt == 0)
-        {
-            delete *it;
-            continue;
-        }
-
-        rc = vatt->vector_value("ID", dsid);
-
-        if (rc == 0 && non_shared_ds.count(dsid) == 1)
-        {
-            local_ds_att.push_back(vatt);
-        }
-        else
-        {
-            delete *it;
-        }
-    }
-
-    host_share.set_ds_monitorization(local_ds_att);
-
 
     return 0;
 }

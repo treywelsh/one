@@ -25,18 +25,8 @@
 
 #include "HostSharePCI.h"
 #include "HostShareNUMA.h"
+#include "HostShareDatastore.h"
 #include "HostShareCapacity.h"
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-class HostShareDatastore : public Template
-{
-public:
-    HostShareDatastore() : Template(false, '=', "DATASTORES"){};
-
-    virtual ~HostShareDatastore(){};
-};
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -111,25 +101,11 @@ public:
     string& to_xml(string& xml) const;
 
     /**
-     *  Set host information based on the monitorinzation attributes
-     *  sent by the probes.
-     */
-    void set_ds_monitorization(const vector<VectorAttribute*> &ds_att);
-
-    void set_pci_monitorization(Template &ht)
-    {
-        pci.set_monitorization(ht);
-    }
-
-    void set_numa_monitorization(Template &ht)
-    {
-        numa.set_monitorization(ht, vms_thread);
-    }
-
-    /**
      * Set the capacity attributes of the share. CPU and Memory may reserve some
      * capacity according to RESERVED_CPU and RESERVED_MEM. These values can be
      * either absolute or a percentage.
+     *
+     * The function also set the PCI, NUMA and datastore information.
      *
      * Share values are read from the Host template returned by the monitoring
      * probes. The values are removed from the template.
@@ -140,7 +116,7 @@ public:
      *
      * NOTE: reserved strings will be modified
      */
-    void set_capacity_monitorization(Template& ht, string& rcpu, string& rmem);
+    void set_monitorization(Template& ht, string& rcpu, string& rmem);
 
     /**
      *  Resets capaity values of the share
@@ -181,22 +157,18 @@ public:
 
 private:
 
-    long long disk_usage; /**< Disk allocated to VMs (in MB).        */
     long long mem_usage;  /**< Memory allocated to VMs (in KB)       */
     long long cpu_usage;  /**< CPU  allocated to VMs (in percentage) */
 
     long long total_mem;  /**< Total memory capacity (in KB)         */
     long long total_cpu;  /**< Total cpu capacity (in percentage)    */
 
-    long long max_disk;   /**< Total disk capacity (in MB)           */
     long long max_mem;    /**< Total memory capacity (in KB) +/- reserved     */
     long long max_cpu;    /**< Total cpu capacity (in percentage) +/- reserved*/
 
-    long long free_disk;  /**< Free disk from the IM monitor         */
     long long free_mem;   /**< Free memory from the IM monitor       */
     long long free_cpu;   /**< Free cpu from the IM monitor          */
 
-    long long used_disk;  /**< Used disk from the IM monitor         */
     long long used_mem;   /**< Used memory from the IM monitor       */
     long long used_cpu;   /**< Used cpu from the IM monitor          */
 
@@ -205,7 +177,9 @@ private:
     unsigned int vms_thread; /**< VMs that can be allocated to a thread */
 
     HostShareDatastore ds;
+
     HostSharePCI       pci;
+
     HostShareNUMA      numa;
 
     /**
