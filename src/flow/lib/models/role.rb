@@ -384,9 +384,11 @@ module OpenNebula
                 n_nodes = nodes.size
             end
 
-            success = shutdown_nodes(nodes[0..n_nodes-1], scale_down)
+            rc = shutdown_nodes(nodes, n_nodes, scale_down)
 
-            [success, nil]
+            return [false, "Error undeploying nodes for role #{id}"] unless rc[0]
+
+            [rc[1], nil]
         end
 
         # Delete all the nodes in this role
@@ -1072,8 +1074,9 @@ module OpenNebula
 
         # Shuts down all the given nodes
         # @param scale_down [true,false] True to set the 'disposed' node flag
-        def shutdown_nodes(nodes, scale_down)
+        def shutdown_nodes(nodes, n_nodes, scale_down)
             success = true
+            undeployed_nodes = []
 
             action = @body['shutdown_action']
 
@@ -1085,10 +1088,12 @@ module OpenNebula
                 action = @@default_shutdown
             end
 
-            nodes.each { |node|
+            nodes.slice!(0..n_nodes-1).delete_if do |node|
                 vm_id = node['deploy_id']
 
-                Log.debug LOG_COMP, "Role #{name} : Terminating VM #{vm_id}", @service.id()
+                Log.debug(LOG_COMP,
+                          "Role #{name} : Terminating VM #{vm_id}",
+                          @service.id)
 
                 vm = OpenNebula::VirtualMachine.new_with_id(vm_id, @service.client)
 
@@ -1122,14 +1127,21 @@ module OpenNebula
 
                         success = false
                     else
-                        Log.debug LOG_COMP, "Role #{name} : Delete success for VM #{vm_id}", @service.id()
+                        Log.debug(LOG_COMP,
+                                  "Role #{name} : Delete success for VM #{vm_id}",
+                                  @service.id)
                     end
                 else
-                    Log.debug LOG_COMP, "Role #{name} : Terminate success for VM #{vm_id}", @service.id()
+                    Log.debug(LOG_COMP,
+                              "Role #{name}: Terminate success for VM #{vm_id}",
+                              @service.id)
+                    undeployed_nodes << vm_id
                 end
-            }
 
-            success
+                !OpenNebula.is_error?(rc)
+            end
+
+            [success, undeployed_nodes]
         end
 
         def vm_failure?(node)

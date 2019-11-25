@@ -122,7 +122,10 @@ class ServiceLCM
                 break
             end
 
-            rc = undeploy_roles(roles, 'UNDEPLOYING', 'FAILED_UNDEPLOYING')
+            rc = undeploy_roles(roles,
+                                'UNDEPLOYING',
+                                'FAILED_UNDEPLOYING',
+                                false)
 
             if rc
                 service.set_state(Service::STATE['UNDEPLOYING'])
@@ -137,9 +140,6 @@ class ServiceLCM
     end
 
     def scale_action(service_id, role_name, cardinality, force)
-        File.open("/tmp/loga", "a") do |file|
-            file.write("scale-action\n")
-        end
         rc = @srv_pool.get(service_id) do |service|
             # TODO, check service state know the resource is locked
             rc = nil
@@ -157,7 +157,8 @@ class ServiceLCM
             elsif cardinality_diff < 0
                 rc = undeploy_roles({ role_name => role },
                                     'SCALING',
-                                    'FAILED_SCALING')
+                                    'FAILED_SCALING',
+                                    true)
             end
 
             if rc
@@ -168,9 +169,7 @@ class ServiceLCM
 
             service.update
         end
-        File.open("/tmp/loga", "a") do |file|
-            file.write("scale-action END\n")
-        end
+
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
@@ -220,6 +219,19 @@ class ServiceLCM
 
     def undeploy_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
+            if service.roles[role_name].state == Service::STATE['SCALING']
+                service.set_state(Service::STATE['COOLDOWN'])
+                service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
+                @event_manager.trigger_action(:wait_cooldown,
+                                              service.id,
+                                              service.id,
+                                              role_name,
+                                              10) # TOO, config time
+                service.update
+
+                break
+            end
+
             service.roles[role_name].set_state(Role::STATE['DONE'])
 
             if service.all_roles_done?
@@ -314,9 +326,9 @@ class ServiceLCM
         true
     end
 
-    def undeploy_roles(roles, success_state, error_state)
+    def undeploy_roles(roles, success_state, error_state, scale)
         roles.each do |_name, role|
-            rc = role.shutdown
+            rc = role.shutdown scale
 
             if !rc[0]
                 role.set_state(Role::STATE[error_state])
@@ -330,7 +342,7 @@ class ServiceLCM
                                           role.service.id,
                                           role.service.id,
                                           role.name,
-                                          role.nodes_ids)
+                                          rc[0])
         end
     end
 
