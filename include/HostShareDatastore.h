@@ -27,7 +27,8 @@ class HostShareCapacity;
 class HostShareDatastore : public Template
 {
 public:
-    HostShareDatastore() : Template(false, '=', "DATASTORES"){};
+    HostShareDatastore() : Template(false, '=', "DATASTORES"), disk_usage(0),
+    max_disk(0), free_disk(0), used_disk(0){};
 
     virtual ~HostShareDatastore(){};
 
