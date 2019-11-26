@@ -43,6 +43,8 @@ module NUMA
                 node_s << " DISTANCE = \"#{v['distance']}\" ]\n"
             end
         end
+
+        node_s
     end
 
     # --------------------------------------------------------------------------
@@ -105,6 +107,6 @@ end
 
 nodes_s = ''
 
-nodes.each {|i, v| nodes_s << node_to_template(v, i) }
+nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
 
 puts nodes_s
