@@ -16,13 +16,12 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-$LOAD_PATH.unshift File.dirname("#{__FILE__}../../../../vmm/lxd/")
+$LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../../../../vmm/lxd/"
 
 require 'container'
 require 'client'
-require_relative '../../../lib/poll_common'
-
 require 'base64'
+require_relative '../../../lib/poll_common'
 
 ################################################################################
 #

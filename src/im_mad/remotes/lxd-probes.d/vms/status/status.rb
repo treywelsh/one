@@ -1,5 +1,3 @@
-#!/usr/bin/ruby
-
 # !/usr/bin/env ruby
 
 # -------------------------------------------------------------------------- #
@@ -18,12 +16,12 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-$LOAD_PATH.unshift File.dirname("#{__FILE__}../../../../vmm/lxd/")
+$LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../../../../vmm/lxd/"
 
 require 'container'
 require 'client'
-require_relative '../../../lib/poll_common'
 require 'base64'
+require_relative '../../../lib/poll_common'
 
 module LXD
 
@@ -72,7 +70,7 @@ module LXD
 
             vms_info = {}
             vms.each do |container|
-                vms_info[container.name][:state] = one_status(container)
+                vms_info[container.name] = { :status => one_status(container) }
             end
 
             vms_info

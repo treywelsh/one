@@ -98,11 +98,11 @@ def print_all_vm_template(hypervisor)
 
     return if vms.nil?
 
-    template, data = vm_info(hypervisor)
+    template, monitor_data = vm_info(vms)
 
     puts 'VM_POLL=YES'
 
-    template << "  POLL=\"#{data}\" ]"
+    template << "  POLL=\"#{monitor_data}\" ]"
 
     puts template
 end
@@ -112,11 +112,11 @@ def print_all_vm_status(hypervisor)
 
     return if vms.nil?
 
-    template, data = vm_info(hypervisor)
+    template, monitor_data = vm_info(vms)
 
     puts 'VM_STATUS=YES'
 
-    template << "  STATUS=\"#{data}\" ]"
+    template << "  #{monitor_data} ]"
 
     puts template
 end
@@ -143,6 +143,6 @@ def vm_info(vms)
             print_data(key, value)
         end
 
-        return [string, values.zip.join(' ')]
+        return string, values.zip.join(' ')
     end
 end
