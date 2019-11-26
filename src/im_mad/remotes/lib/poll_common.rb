@@ -93,7 +93,7 @@ def print_all_vm_info(hypervisor)
     puts Base64.encode64(compressed).delete("\n")
 end
 
-def print_all_vm_template(hypervisor)
+def all_vm_template(hypervisor)
     vms = hypervisor.get_all_vm_template
 
     return if vms.nil?
@@ -107,18 +107,16 @@ def print_all_vm_template(hypervisor)
     puts template
 end
 
-def print_all_vm_status(hypervisor)
+def all_vm_status(hypervisor)
     vms = hypervisor.get_all_vm_status
 
     return if vms.nil?
 
     template, monitor_data = vm_info(vms)
 
-    puts 'VM_STATUS=YES'
-
     template << "  #{monitor_data} ]"
 
-    puts template
+    template
 end
 
 def vm_info(vms)

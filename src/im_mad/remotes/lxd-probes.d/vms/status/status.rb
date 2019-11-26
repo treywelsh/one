@@ -22,6 +22,7 @@ require 'container'
 require 'client'
 require 'base64'
 require_relative '../../../lib/poll_common'
+require 'sequel'
 
 module LXD
 
@@ -80,8 +81,56 @@ module LXD
 
 end
 
+def connect(db_path)
+    Sequel.connect("sqlite://#{db_path}")
+end
+
+def setup_db(db)
+    db.create_table :states do
+        primary_key :id
+        # String :timestamp # TODO: Add status update-based timestamp
+        String :did
+        String :status
+    end
+end
+
+DB_PATH = 'status.db'
+
 ################################################################################
 # MAIN PROGRAM
 ################################################################################
 
-print_all_vm_status(LXD)
+data = all_vm_status(LXD)
+vms = data.split('VM=')
+new_data = ''
+
+db = connect(DB_PATH)
+
+begin
+    setup_db(db)
+rescue
+end
+
+dataset = db[:states]
+
+vms.each do |vm|
+    id = vm[/ID=\d+/]
+    did = vm[/DEPLOY_ID=[-0-9a-zA-Z_]+/] # TODO: May change ?
+    status = vm[/STATUS=\S?/]
+
+    begin
+        vminfo = dataset.match(id)
+
+        if vminfo[:state] != status
+            dataset.update(vminfo[:state] => data)
+            new_data << vm
+        end
+    rescue
+        dataset.insert(:id => id, :did => did, :status => status)
+        new_data << vm
+    end
+end
+
+return if new_data.empty?
+
+puts "VM_STATUS=YES\n#{new_data}"
