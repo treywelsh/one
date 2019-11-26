@@ -32,6 +32,8 @@ public:
         : Template(true, '=', "CAPACITY")
     {}
 
+    int from_template(const Template &tmpl);
+
     // todo if needed add attribute getters and setters:
     // uint64_t used_cpu() const
     // void set_used_cpu(uint64_t used_cpu)
@@ -50,6 +52,8 @@ public:
     DatastoresMonitoring()
         : Template(false, '=', "DATASTORES")
     {}
+
+    int from_template(const Template &tmpl);
 };
 
 /**
@@ -65,6 +69,8 @@ public:
     SystemMonitoring()
         : Template(true, '=', "SYSTEM")
     {}
+
+    int from_template(const Template &tmpl);
 };
 
 /**
@@ -82,12 +88,16 @@ public:
 
     time_t timestamp() const { return _timestamp; }
 
+    void timestamp(time_t timestamp) { _timestamp = timestamp; }
+
     /**
      *  Fills monitoring data from xml_string
      *  If some data are not contained, keep old data
      *  @return 0 on succes, -1 otherwise
      */
     int from_xml(const std::string& xml_string);
+
+    int from_template(const Template &tmpl);
 
 private:
     time_t _timestamp;

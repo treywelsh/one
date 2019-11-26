@@ -36,6 +36,11 @@ class UDPStream : public StreamManager<E>
 public:
     using callback_t = std::function<void(std::unique_ptr<Message<E>>)>;
 
+    UDPStream(const std::string &address, unsigned int port, callback_t error):
+        StreamManager<E>(error), _socket(-1), _address(address), _port(port)
+    {
+    }
+
     UDPStream(const std::string &a, const std::string &p, callback_t error):
         StreamManager<E>(error), _socket(-1), _address(a)
     {

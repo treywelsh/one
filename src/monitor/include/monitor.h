@@ -59,6 +59,8 @@ private:
 
     std::unique_ptr<DriverManager> dm;
 
+    std::unique_ptr<udp_streamer_t> udp_stream;
+
     bool terminate = false;
 };
 

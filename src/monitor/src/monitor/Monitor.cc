@@ -142,7 +142,7 @@ void Monitor::start()
     // -------------------------------------------------------------------------
     vector<const VectorAttribute *> drivers_conf;
 
-    config->get("DRIVER", drivers_conf);
+    config->get("IM_MAD", drivers_conf);
 
     dm.reset(new DriverManager());
 
@@ -162,6 +162,34 @@ void Monitor::start()
     {
         NebulaLog::log("MON", Log::ERROR, "Unable to start DriverManager, exiting");
         return;
+    }
+
+    // -----------------------------------------------------------
+    // UDP action listener
+    // -----------------------------------------------------------
+    {
+        std::string error;
+        std::string address = "0.0.0.0";
+        unsigned int port = 4124;
+        unsigned int threads = 16;
+
+        auto udp_conf = config->get("UDP_LISTENER");
+        if (udp_conf)
+        {
+            udp_conf->vector_value("ADDRESS", address, address);
+            udp_conf->vector_value("PORT", port, port);
+            udp_conf->vector_value("THREADS", threads, threads);
+        }
+
+        udp_stream.reset(new udp_streamer_t(address, port, std::bind(&Monitor::process_undefined, this, _1)));
+        udp_stream->register_action(MonitorDriverMessages::MONITOR_VM, std::bind(&Monitor::process_monitor_vm, this, _1));
+        udp_stream->register_action(MonitorDriverMessages::MONITOR_HOST, std::bind(&Monitor::process_monitor_host, this, _1));
+        udp_stream->register_action(MonitorDriverMessages::SYSTEM_HOST, std::bind(&Monitor::process_system_host, this, _1));
+        udp_stream->register_action(MonitorDriverMessages::STATE_VM, std::bind(&Monitor::process_state_vm, this, _1));
+        if (udp_stream->action_loop(threads, error) != 0)
+        {
+            NebulaLog::error("MON", "Unable to init UDP action listener: " + error);
+        }
     }
 
     // -----------------------------------------------------------
@@ -249,6 +277,11 @@ void Monitor::thread_execute()
     // Do initial pull from oned, then read only changes
     hpool->update();
 
+    for (auto& host : hpool->get_objects())
+    {
+        dm->start_monitor(static_cast<HostBase*>(host.second.get()), true);
+    }
+
     // Maybe it's not necessery to have two threads (Monitor::thread_execute
     // and OnedStream::run), we will see later
     one_stream_t oned_reader(0, [](std::unique_ptr<Message<OpenNebulaMessages>> ms) {
@@ -279,6 +312,12 @@ void Monitor::thread_execute()
 
         sleep(5);
     }
+
+    for (auto& host : hpool->get_objects())
+    {
+        dm->stop_monitor(static_cast<HostBase*>(host.second.get()));
+    }
+
 }
 
 /* -------------------------------------------------------------------------- */
@@ -322,20 +361,50 @@ void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>>
 void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
     NebulaLog::log("MON", Log::INFO, "process_monitor_host: " + msg->payload());
-    try {
-        HostMonitoringTemplate monitoring;
 
-        if (monitoring.from_xml(msg->payload()) != 0 || monitoring.oid() == -1)
+    try
+    {
+        auto msg_string = msg->payload();
+        char* error_msg;
+        Template tmpl;
+        int rc = tmpl.parse(msg_string, &error_msg);
+
+        if (rc != 0)
         {
-            NebulaLog::log("MON", Log::ERROR, "Error parsing monitoring msg: " + msg->payload());
+            NebulaLog::error("MON", string("Unable to parse monitoring template") + error_msg);
+            free(error_msg);
             return;
         }
 
-        auto host = hpool->get(monitoring.oid());
-        if (host == nullptr)
+        int oid;
+        if (!tmpl.get("OID", oid))
         {
-            NebulaLog::log("MON", Log::WARNING,
-                "Monitoring received, host does not exists, id = " + std::to_string(monitoring.oid()));
+            NebulaLog::error("MON", "Monitor information does not contain host id");
+            return;
+        };
+
+        auto host = hpool->get(oid);
+        if (!host)
+        {
+            NebulaLog::warn("MON", "Received monitoring for unknown host" + to_string(oid));
+            return;
+        }
+
+        string result;
+        tmpl.get("RESULT", result);
+        if (result != "SUCCESS")
+        {
+            // todo Handle monitor failure
+            return;
+        }
+
+        HostMonitoringTemplate monitoring;
+
+        monitoring.timestamp(time(nullptr));
+
+        if (monitoring.from_template(tmpl) != 0 || monitoring.oid() == -1)
+        {
+            NebulaLog::log("MON", Log::ERROR, "Error parsing monitoring msg: " + msg->payload());
             return;
         }
 

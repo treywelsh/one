@@ -27,6 +27,68 @@ using namespace std;
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+int CapacityMonitoring::from_template(const Template &tmpl)
+{
+    int value;
+    if (tmpl.get("FREECPU", value))
+    {
+        add("FREE_CPU", value);
+    }
+    if (tmpl.get("USEDCPU", value))
+    {
+        add("USED_CPU", value);
+    }
+    if (tmpl.get("FREEMEMORY", value))
+    {
+        add("FREE_MEMORY", value);
+    }
+    if (tmpl.get("USEDMEMORY", value))
+    {
+        add("USED_MEMORY", value);
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int DatastoresMonitoring::from_template(const Template &tmpl)
+{
+    vector<const VectorAttribute*> ds_att;
+    if (tmpl.get("DS", ds_att))
+    {
+        for (auto vattr : ds_att)
+        {
+            set(vattr->clone());
+        }
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int SystemMonitoring::from_template(const Template &tmpl)
+{
+    int value;
+    if (tmpl.get("CPUSPEED", value))
+    {
+        add("CPU_SPEED", value);
+    }
+    if (tmpl.get("NETTX", value))
+    {
+        add("NETTX", value);
+    }
+    if (tmpl.get("NETRX", value))
+    {
+        add("NETRX", value);
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 string HostMonitoringTemplate::to_xml() const
 {
     string capacity_s;
@@ -98,4 +160,21 @@ int HostMonitoringTemplate::from_xml(const std::string& xml_string)
     }
 
     return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+int HostMonitoringTemplate::from_template(const Template &tmpl)
+{
+    if (!tmpl.get("OID", _oid))
+    {
+        return -1;
+    }
+
+    int rc = capacity.from_template(tmpl);
+    rc += datastores.from_template(tmpl);
+    rc += system.from_template(tmpl);
+
+    return rc;
 }

@@ -19,6 +19,7 @@
 
 #include "MonitorDriver.h"
 #include "Attribute.h"
+#include "HostBase.h"
 #include <string>
 
 class DriverManager
@@ -45,6 +46,10 @@ public:
      *  Stop all drivers
      */
     void stop();
+
+    int start_monitor(HostBase* host, bool update_remotes);
+
+    int stop_monitor(HostBase* host);
 
 private:
     std::map<std::string, driver_t*> drivers;

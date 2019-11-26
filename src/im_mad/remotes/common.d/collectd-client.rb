@@ -69,16 +69,17 @@ class CollectdClient
         data   = `#{@run_probes_cmd} 2>&1`
         code   = $?.exitstatus == 0
 
-        zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
+        result = code ? "SUCCESS" : "FAILURE"
+        msg = "RESULT=#{result} \nOID=#{@number} \n#{data}"
+
+        zdata  = Zlib::Deflate.deflate(msg, Zlib::BEST_COMPRESSION)
         data64 = Base64::encode64(zdata).strip.delete("\n")
 
-        [data64, code]
+        data64
     end
 
     def send(data)
-        message, code = data
-        result = code ? "SUCCESS" : "FAILURE"
-        @s.send("MONITOR #{result} #{@number} #{message}\n", 0, @host, @port)
+        @s.send("MONITOR_HOST #{data}\n", 0, @host, @port)
     end
 
     def monitor
