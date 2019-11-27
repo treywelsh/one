@@ -128,12 +128,6 @@ public:
 
         max_cpu = 0;
         max_mem = 0;
-
-        free_cpu = 0;
-        free_mem = 0;
-
-        used_cpu = 0;
-        used_mem = 0;
     };
 
     /**
@@ -165,12 +159,6 @@ private:
 
     long long max_mem;    /**< Total memory capacity (in KB) +/- reserved     */
     long long max_cpu;    /**< Total cpu capacity (in percentage) +/- reserved*/
-
-    long long free_mem;   /**< Free memory from the IM monitor       */
-    long long free_cpu;   /**< Free cpu from the IM monitor          */
-
-    long long used_mem;   /**< Used memory from the IM monitor       */
-    long long used_cpu;   /**< Used cpu from the IM monitor          */
 
     long long running_vms;/**< Number of running VMs in this Host   */
 

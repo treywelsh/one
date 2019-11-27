@@ -194,7 +194,7 @@ void MonitorThread::do_message()
 
     hpool->update(host);
 
-    std:ostringstream oss;
+    std::ostringstream oss;
 
     oss << "Host " << host->get_name() << " (" << host->get_oid() << ")"
         << " successfully monitored.";

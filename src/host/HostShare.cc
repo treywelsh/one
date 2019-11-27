@@ -38,10 +38,6 @@ HostShare::HostShare():
         total_cpu(0),
         max_mem(0),
         max_cpu(0),
-        free_mem(0),
-        free_cpu(0),
-        used_mem(0),
-        used_cpu(0),
         running_vms(0),
         vms_thread(1){};
 
@@ -69,10 +65,6 @@ string& HostShare::to_xml(string& xml) const
           << "<TOTAL_CPU>"  << total_cpu  << "</TOTAL_CPU>"
           << "<MAX_MEM>"    << max_mem    << "</MAX_MEM>"
           << "<MAX_CPU>"    << max_cpu    << "</MAX_CPU>"
-          << "<FREE_MEM>"   << free_mem   << "</FREE_MEM>"
-          << "<FREE_CPU>"   << free_cpu   << "</FREE_CPU>"
-          << "<USED_MEM>"   << used_mem   << "</USED_MEM>"
-          << "<USED_CPU>"   << used_cpu   << "</USED_CPU>"
           << "<RUNNING_VMS>"<<running_vms <<"</RUNNING_VMS>"
           << "<VMS_THREAD>" << vms_thread <<"</VMS_THREAD>"
           << ds.to_xml(ds_xml)
@@ -104,12 +96,6 @@ int HostShare::from_xml_node(const xmlNodePtr node)
 
     rc += xpath<long long>(max_mem , "/HOST_SHARE/MAX_MEM", -1);
     rc += xpath<long long>(max_cpu , "/HOST_SHARE/MAX_CPU", -1);
-
-    rc += xpath<long long>(free_mem, "/HOST_SHARE/FREE_MEM", -1);
-    rc += xpath<long long>(free_cpu, "/HOST_SHARE/FREE_CPU", -1);
-
-    rc += xpath<long long>(used_mem, "/HOST_SHARE/USED_MEM", -1);
-    rc += xpath<long long>(used_cpu, "/HOST_SHARE/USED_CPU", -1);
 
     rc += xpath<long long>(running_vms, "/HOST_SHARE/RUNNING_VMS", -1);
 
@@ -233,18 +219,6 @@ void HostShare::set_monitorization(Template& ht, string& rcpu, string& rmem)
     ht.get("TOTALMEMORY", total_mem);
     ht.erase("TOTALMEMORY");
     set_reserved_metric(max_mem, total_mem, rmem);
-
-    ht.get("FREECPU", free_cpu);
-    ht.erase("FREECPU");
-
-    ht.get("FREEMEMORY", free_mem);
-    ht.erase("FREEMEMORY");
-
-    ht.get("USEDCPU", used_cpu);
-    ht.erase("USEDCPU");
-
-    ht.get("USEDMEMORY", used_mem);
-    ht.erase("USEDMEMORY");
 
     ds.set_monitorization(ht);
 
