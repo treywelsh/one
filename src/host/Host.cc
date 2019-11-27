@@ -183,30 +183,8 @@ error_common:
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-int Host::update_info(Template        &tmpl,
-                      bool            &with_vm_info,
-                      set<int>        &lost,
-                      map<int,string> &found)
+int Host::update_info(Template &tmpl)
 {
-    VectorAttribute*             vatt;
-    vector<Attribute*>::iterator it;
-    vector<Attribute*>           vm_att;
-
-    int   rc;
-    int   vmid;
-
-    ostringstream zombie;
-    ostringstream wild;
-
-    set<int>::iterator        set_it;
-    map<int,string>::iterator map_it;
-
-    set<int> prev_tmp_lost   = *tmp_lost_vms;
-    set<int> prev_tmp_zombie = *tmp_zombie_vms;
-
-    int num_zombies = 0;
-    int num_wilds   = 0;
-
     if ( state == OFFLINE )
     {
         return -1;
@@ -226,8 +204,6 @@ int Host::update_info(Template        &tmpl,
     remove_template_attribute("VM");
     remove_template_attribute("VM_POLL");
 
-    remove_template_attribute("DS");
-
     // -------------------------------------------------------------------------
     // Copy monitor, extract share info & update last_monitored and state
     // -------------------------------------------------------------------------
@@ -241,135 +217,6 @@ int Host::update_info(Template        &tmpl,
     reserved_capacity(rcpu, rmem);
 
     host_share.set_monitorization(*obj_template, rcpu, rmem);
-
-    // -------------------------------------------------------------------------
-    // Correlate VM information with the list of running VMs
-    // -------------------------------------------------------------------------
-
-    erase_template_attribute("VM_POLL", with_vm_info);
-
-    obj_template->remove("VM", vm_att);
-
-    *tmp_lost_vms = vm_collection.clone();
-
-    tmp_zombie_vms->clear();
-
-    for (it = vm_att.begin(); it != vm_att.end(); it++)
-    {
-        vatt = dynamic_cast<VectorAttribute*>(*it);
-
-        if (vatt == 0)
-        {
-            delete *it;
-            continue;
-        }
-
-        rc = vatt->vector_value("ID", vmid);
-
-        if (rc == 0 && vmid == -1) //Check if it is an imported
-        {
-            Nebula&  nd = Nebula::instance();
-            VirtualMachinePool * vmpool = nd.get_vmpool();
-
-            vmid = vmpool->get_vmid(vatt->vector_value("DEPLOY_ID"));
-        }
-
-        if (rc == 0 && vmid != -1)
-        {
-            map<int, string>::iterator it_vm;
-
-            it_vm = found.find(vmid);
-
-            if ( tmp_lost_vms->erase(vmid) == 1 ) //Good, known
-            {
-                found.insert(make_pair(vmid, vatt->vector_value("POLL")));
-            }
-            else if ( it_vm != found.end() )
-            {
-                it_vm->second += " " + vatt->vector_value("POLL");
-            }
-            else //Bad, known but should not be here
-            {
-                tmp_zombie_vms->insert(vmid);
-
-                // Reported as zombie at least 2 times?
-                if (prev_tmp_zombie.count(vmid) == 1)
-                {
-                    string zname = vatt->vector_value("VM_NAME");
-
-                    if (zname.empty())
-                    {
-                        zname = vatt->vector_value("DEPLOY_ID");
-                    }
-
-                    if (!zname.empty())
-                    {
-                        if (num_zombies++ > 0)
-                        {
-                            zombie << ", ";
-                        }
-                        zombie << zname;
-                    }
-                }
-            }
-
-            delete *it;
-        }
-        else if (rc == 0) //not ours
-        {
-            string wname;
-
-            if (num_wilds++ > 0)
-            {
-                wild << ", ";
-            }
-
-            wname = vatt->vector_value("VM_NAME");
-
-            if (wname.empty())
-            {
-                wname = vatt->vector_value("DEPLOY_ID");
-            }
-
-            wild << wname;
-
-            obj_template->set(*it);
-        }
-    }
-
-    for (map_it = found.begin(); map_it != found.end(); )
-    {
-        if ( one_util::regex_match("STATE=.",map_it->second.c_str()) != 0 )
-        {
-            tmp_lost_vms->insert(map_it->first);
-            found.erase(map_it++);
-        }
-        else
-        {
-            ++map_it;
-        }
-    }
-
-    for (set_it = tmp_lost_vms->begin(); set_it != tmp_lost_vms->end(); set_it++)
-    {
-        // Reported as lost at least 2 times?
-        if (prev_tmp_lost.count(*set_it) == 1)
-        {
-            lost.insert(*set_it);
-        }
-    }
-
-    if (num_wilds > 0)
-    {
-        add_template_attribute("TOTAL_WILDS", num_wilds);
-        add_template_attribute("WILDS", wild.str());
-    }
-
-    if (num_zombies > 0)
-    {
-        add_template_attribute("TOTAL_ZOMBIES", num_zombies);
-        add_template_attribute("ZOMBIES", zombie.str());
-    }
 
     return 0;
 }

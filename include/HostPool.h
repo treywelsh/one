@@ -72,34 +72,8 @@ public:
     Host * get(
         int     oid)
     {
-        Host * h = static_cast<Host *>(PoolSQL::get(oid));
-
-        if ( h != 0 )
-        {
-            HostVM * hv = get_host_vm(oid);
-
-            h->tmp_lost_vms   = &(hv->tmp_lost_vms);
-            h->tmp_zombie_vms = &(hv->tmp_zombie_vms);
-
-            h->prev_rediscovered_vms = &(hv->prev_rediscovered_vms);
-        }
-
-        return h;
+        return static_cast<Host *>(PoolSQL::get(oid));
     };
-
-    void update_prev_rediscovered_vms(int hoid,
-        const set<int>& prev_rediscovered_vms)
-    {
-
-        if (hoid < 0)
-        {
-            return;
-        }
-
-        HostVM * hv = get_host_vm(hoid);
-
-        hv->prev_rediscovered_vms = prev_rediscovered_vms;
-    }
 
     /**
      *  Function to get a read only Host from the pool, if the object is not in memory
@@ -110,19 +84,7 @@ public:
     Host * get_ro(
         int     oid)
     {
-        Host * h = static_cast<Host *>(PoolSQL::get_ro(oid));
-
-        if ( h != 0 )
-        {
-            HostVM * hv = get_host_vm(oid);
-
-            h->tmp_lost_vms   = &(hv->tmp_lost_vms);
-            h->tmp_zombie_vms = &(hv->tmp_zombie_vms);
-
-            h->prev_rediscovered_vms = &(hv->prev_rediscovered_vms);
-        }
-
-        return h;
+        return static_cast<Host *>(PoolSQL::get_ro(oid));
     };
 
     /**
@@ -135,19 +97,7 @@ public:
     Host * get(string name)
     {
         // The owner is set to -1, because it is not used in the key() method
-        Host * h = static_cast<Host *>(PoolSQL::get(name,-1));
-
-        if ( h != 0 )
-        {
-            HostVM * hv = get_host_vm(h->oid);
-
-            h->tmp_lost_vms   = &(hv->tmp_lost_vms);
-            h->tmp_zombie_vms = &(hv->tmp_zombie_vms);
-
-            h->prev_rediscovered_vms = &(hv->prev_rediscovered_vms);
-        }
-
-        return h;
+        return static_cast<Host *>(PoolSQL::get(name,-1));
     };
 
     /**
@@ -160,19 +110,7 @@ public:
     Host * get_ro(string name)
     {
         // The owner is set to -1, because it is not used in the key() method
-        Host * h = static_cast<Host *>(PoolSQL::get_ro(name,-1));
-
-        if ( h != 0 )
-        {
-            HostVM * hv = get_host_vm(h->oid);
-
-            h->tmp_lost_vms   = &(hv->tmp_lost_vms);
-            h->tmp_zombie_vms = &(hv->tmp_zombie_vms);
-
-            h->prev_rediscovered_vms = &(hv->prev_rediscovered_vms);
-        }
-
-        return h;
+        return static_cast<Host *>(PoolSQL::get_ro(name,-1));
     };
 
     /**
@@ -264,7 +202,6 @@ public:
     int drop(PoolObjectSQL * objsql, string& error_msg)
     {
         Host * host = static_cast<Host *>(objsql);
-        int oid = host->oid;
 
         if ( host->get_share_running_vms() > 0 )
         {
@@ -272,14 +209,7 @@ public:
             return -1;
         }
 
-        int rc = PoolSQL::drop(objsql, error_msg);
-
-        if ( rc == 0 )
-        {
-            delete_host_vm(oid);
-        }
-
-        return rc;
+        return PoolSQL::drop(objsql, error_msg);
     };
 
     /**
@@ -364,40 +294,6 @@ public:
     int clean_expired_monitoring();
 
 private:
-    /**
-     * Stores several Host counters to give VMs one monitor grace cycle before
-     * moving them to another state
-     */
-    struct HostVM
-    {
-        /**
-         * Tmp set of lost VM IDs.
-         */
-        set<int> tmp_lost_vms;
-
-        /**
-         * Tmp set of zombie VM IDs.
-         */
-        set<int> tmp_zombie_vms;
-
-        /**
-         * VMs reported as found from the poweroff state.
-         */
-        set<int> prev_rediscovered_vms;
-    };
-
-    CachePool<HostVM> cache;
-
-    HostVM * get_host_vm(int oid)
-    {
-        return cache.get_resource(oid);
-    }
-
-    void delete_host_vm(int oid)
-    {
-        cache.delete_resource(oid);
-    }
-
     /**
      *  Factory method to produce Host objects
      *    @return a pointer to the new Host

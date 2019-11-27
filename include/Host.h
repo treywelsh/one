@@ -236,15 +236,10 @@ public:
      * Update host after a successful monitor. It modifies counters, state
      * and template attributes
      *    @param parse_str string with values to be parsed
-     *    @param with_vm_info if monitoring contains VM information
-     *    @param lost set of VMs that should be in the host and were not found
-     *    @param found VMs running in the host (as expected) and info.
      *    @return 0 on success
      **/
-    int update_info(Template        &tmpl,
-                    bool            &with_vm_info,
-                    set<int>        &lost,
-                    map<int,string> &found);
+    int update_info(Template &tmpl);
+
     /**
      * Update host after a failed monitor. It state
      * and template attributes
@@ -410,26 +405,6 @@ public:
      */
     int post_update_template(string& error) override;
 
-    /**
-     * Returns the rediscovered VMs (from poff to running) in the previous
-     * monitorization cycle
-     * @return the previous rediscovered VMs (from poff to running)
-     */
-    const set<int>& get_prev_rediscovered_vms() const
-    {
-        return *prev_rediscovered_vms;
-    }
-
-    /**
-     * Sets the previous rediscovered VMs (from poff to running). This set
-     * is not stored in the DB, the pool update method is not needed
-     * @param rediscovered_vms the previous rediscovered VMs (from poff to running)
-     */
-    void set_prev_rediscovered_vms(const set<int>& rediscovered_vms)
-    {
-        *prev_rediscovered_vms = rediscovered_vms;
-    }
-
 private:
 
     // -------------------------------------------------------------------------
@@ -470,25 +445,6 @@ private:
      *  The Share represents the logical capacity associated with the host
      */
     HostShare host_share;
-
-    /**
-     * Tmp set of lost VM IDs. Used to give lost VMs one grace cycle, in case
-     * they reappear.
-     */
-    set<int> * tmp_lost_vms;
-
-    /**
-     * Tmp set of zombie VM IDs. Used to give zombie VMs one grace cycle, in
-     * case they are cleaned.
-     */
-    set<int> * tmp_zombie_vms;
-
-    /**
-     * Set that stores the VMs reported as found from the poweroff state. This
-     * is managed from outside the host to avoid deadlocks, as the current
-     * VM state is needed
-     */
-    set<int> * prev_rediscovered_vms;
 
     // -------------------------------------------------------------------------
     //  VM Collection

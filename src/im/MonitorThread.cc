@@ -185,17 +185,7 @@ void MonitorThread::do_message()
     // -------------------------------------------------------------------------
     // Update Host information
     // -------------------------------------------------------------------------
-    bool vm_poll;
-
-    set<int>        lost;
-    map<int,string> found;
-    set<int>        rediscovered_vms;
-
-    ostringstream   oss;
-
-    set<int> prev_rediscovered = host->get_prev_rediscovered_vms();
-
-    if (host->update_info(tmpl, vm_poll, lost, found) != 0)
+    if (host->update_info(tmpl) != 0)
     {
         host->unlock();
 
@@ -204,92 +194,14 @@ void MonitorThread::do_message()
 
     hpool->update(host);
 
-    if ( hpool->update_monitoring(host) == 0 )
-    {
-        oss << "Host " << host->get_name() << " (" << host->get_oid() << ")"
-            << " successfully monitored.";
+    std:ostringstream oss;
 
-        NebulaLog::log("InM", Log::DEBUG, oss);
-    }
+    oss << "Host " << host->get_name() << " (" << host->get_oid() << ")"
+        << " successfully monitored.";
+
+    NebulaLog::log("InM", Log::DEBUG, oss);
 
     host->unlock();
-
-    //--------------------------------------------------------------------------
-    // Process VM information if any. VMs not reported by the hypervisor are
-    // moved to the POWEROFF state.
-    //--------------------------------------------------------------------------
-    if (vm_poll)
-    {
-        set<int>::iterator         its;
-        map<int,string>::iterator  itm;
-
-        for (its = lost.begin(); its != lost.end(); its++)
-        {
-            VirtualMachine * vm = vmpool->get_ro(*its);
-
-            if (vm == 0)
-            {
-                continue;
-            }
-
-            // Move the VM to power off if it is not reported by the Host and:
-            // 1.- It has a history record
-            // 2.- It is supposed to be in RUNNING state
-            // 3.- It has been monitored at least once
-            if (vm->hasHistory() &&
-                vm->get_last_poll() != 0 &&
-                 ( vm->get_lcm_state() == VirtualMachine::RUNNING ||
-                   vm->get_lcm_state() == VirtualMachine::SHUTDOWN ||
-                   vm->get_lcm_state() == VirtualMachine::SHUTDOWN_POWEROFF ||
-                   vm->get_lcm_state() == VirtualMachine::SHUTDOWN_UNDEPLOY))
-            {
-                lcm->trigger(LCMAction::MONITOR_POWEROFF, *its);
-            }
-            // If the guest is shut down before the poll reports it at least
-            // once, the VM gets stuck in running. An individual poll action
-            // is triggered after 5min (arbitrary number)
-            else if (vm->hasHistory() &&
-                    vm->get_last_poll() == 0 &&
-                    vm->get_lcm_state() == VirtualMachine::RUNNING &&
-                    (time(0) - vm->get_running_stime() > 300))
-            {
-                vmm->trigger(VMMAction::POLL,vm->get_oid());
-            }
-
-            vm->unlock();
-        }
-
-        for (itm = found.begin(); itm != found.end(); itm++)
-        {
-            VirtualMachine * vm = vmpool->get(itm->first);
-
-            if (vm == 0)
-            {
-                continue;
-            }
-
-            // When a VM in poweroff is found again, it may be because of
-            // outdated poll information. To make sure, we check if VM was
-            // reported twice
-            if (vm->get_state() == VirtualMachine::POWEROFF &&
-                prev_rediscovered.count(itm->first) == 0)
-            {
-                rediscovered_vms.insert(itm->first);
-
-                vm->unlock();
-                continue;
-            }
-
-            VirtualMachineManagerDriver::process_poll(vm, itm->second);
-
-            vm->unlock();
-        }
-
-        // The rediscovered set is not stored in the DB, the update method
-        // is not needed
-
-        hpool->update_prev_rediscovered_vms(host_id, rediscovered_vms);
-    }
 };
 
 /* -------------------------------------------------------------------------- */
