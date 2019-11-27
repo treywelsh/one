@@ -97,35 +97,39 @@ void Monitor::start()
     // -----------------------------------------------------------
     // Database
     // -----------------------------------------------------------
-    string db_backend_type = "sqlite";
-    string server;
-    int    port;
-    string user;
-    string passwd;
-    string db_name;
-    int    connections;
-
-    const VectorAttribute * _db = config->get("DB");
-
-    if (_db != 0)
     {
-        db_backend_type = _db->vector_value("BACKEND");
+        string db_backend_type = "sqlite";
+        string server;
+        int    port;
+        string user;
+        string passwd;
+        string db_name;
+        string encoding;
+        int    connections;
 
-        _db->vector_value<string>("SERVER", server, "localhost");
-        _db->vector_value("PORT", port, 0);
-        _db->vector_value<string>("USER", user, "oneadmin");
-        _db->vector_value<string>("PASSWD", passwd, "oneadmin");
-        _db->vector_value<string>("DB_NAME", db_name, "opennebula");
-        _db->vector_value("CONNECTIONS", connections, 50);
-    }
+        const VectorAttribute * _db = config->get("DB");
 
-    if (db_backend_type == "sqlite")
-    {
-        sqlDB.reset(new SqliteDB(get_var_location() + "one.db"));
-    }
-    else
-    {
-        sqlDB.reset(new MySqlDB(server, port, user, passwd, db_name, connections));
+        if (_db != 0)
+        {
+            db_backend_type = _db->vector_value("BACKEND");
+
+            _db->vector_value<string>("SERVER", server, "localhost");
+            _db->vector_value("PORT", port, 0);
+            _db->vector_value<string>("USER", user, "oneadmin");
+            _db->vector_value<string>("PASSWD", passwd, "oneadmin");
+            _db->vector_value<string>("DB_NAME", db_name, "opennebula");
+            _db->vector_value<string>("ENCODING", encoding, "");
+            _db->vector_value("CONNECTIONS", connections, 50);
+        }
+
+        if (db_backend_type == "sqlite")
+        {
+            sqlDB.reset(new SqliteDB(get_var_location() + "one.db"));
+        }
+        else
+        {
+            sqlDB.reset(new MySqlDB(server, port, user, passwd, db_name, encoding, connections));
+        }
     }
 
     // -------------------------------------------------------------------------
