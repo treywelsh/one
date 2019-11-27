@@ -16,15 +16,13 @@
 
 #include "HostShareDatastore.h"
 #include "HostShareCapacity.h"
-#include "Nebula.h"
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 void HostShareDatastore::set_monitorization(Template& ht)
 {
-    auto dspool = Nebula::instance().get_dspool();
-
+    bool is_system_local;
     vector<Attribute *> vector_ds;
 
     // -------------------------------------------------------------------------
@@ -39,8 +37,10 @@ void HostShareDatastore::set_monitorization(Template& ht)
     ht.get("DS_LOCATION_USED_MB", used_disk);
     ht.erase("DS_LOCATION_USED_MB");
 
+    update();
+
     // -------------------------------------------------------------------------
-    // Get system datastore monitorization (non_shared) 
+    // Get system datastore monitorization for non shared
     // -------------------------------------------------------------------------
     erase("DS"); //clear current DS information
 
@@ -48,8 +48,6 @@ void HostShareDatastore::set_monitorization(Template& ht)
 
     for (auto it = vector_ds.begin(); it != vector_ds.end(); ++it)
     {
-        int dsid;
-
         auto ds_attr = dynamic_cast<VectorAttribute*>(*it);
 
         if (ds_attr == 0)
@@ -58,33 +56,15 @@ void HostShareDatastore::set_monitorization(Template& ht)
             continue;
         }
 
-        int rc = ds_attr->vector_value("ID", dsid);
+        int rc = ds_attr->vector_value("LOCAL_SYSTEM_DS", is_system_local);
 
-        if (rc != 0 || dsid == -1)
+        if (rc != 0 || !is_system_local)
         {
             delete *it;
             continue;
         }
 
-        auto ds_ptr = dspool->get_ro(dsid);
-
-        if (ds_ptr == 0)
-        {
-            delete *it;
-            continue;
-        }
-
-        if (ds_ptr->get_type() == Datastore::SYSTEM_DS && !ds_ptr->is_shared())
-        {
-            set(*it);
-        }
-        else
-        {
-            delete *it;
-        }
-
-        ds_ptr->unlock();
-
+        set(*it);
     }
 }
 
@@ -105,6 +85,18 @@ void HostShareDatastore::del(HostShareCapacity &sr)
     disk_usage -= sr.disk;
 
     replace("DISK_USAGE", disk_usage);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void HostShareDatastore::update()
+{
+    replace("DISK_USAGE", disk_usage);
+
+    replace("MAX_DISK",  max_disk);
+    replace("FREE_DISK", free_disk);
+    replace("USED_DISK", used_disk);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -136,6 +128,8 @@ int HostShareDatastore::from_xml_node(const xmlNodePtr node)
     {
         used_disk = 0;
     }
+
+    update();
 
     return 0;
 }

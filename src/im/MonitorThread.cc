@@ -149,10 +149,41 @@ void MonitorThread::do_message()
 
     delete hinfo;
 
-    host->unlock();
+    // -------------------------------------------------------------------------
+    // Label local system datastores to include them in the HostShare
+    // -------------------------------------------------------------------------
+    vector<VectorAttribute*> vector_ds;
+
+    tmpl.get("DS", vector_ds);
+
+    for (auto& ds : vector_ds)
+    {
+        int dsid;
+
+        int rc = ds->vector_value("ID", dsid);
+
+        if (rc != 0 || dsid == -1)
+        {
+            continue;
+        }
+
+        auto ds_ptr = dspool->get_ro(dsid);
+
+        if (ds_ptr == 0)
+        {
+            continue;
+        }
+
+        if (ds_ptr->get_type() == Datastore::SYSTEM_DS && !ds_ptr->is_shared())
+        {
+            ds->replace("LOCAL_SYSTEM_DS", true);
+        }
+
+        ds_ptr->unlock();
+    }
 
     // -------------------------------------------------------------------------
-    // Parse Host information
+    // Update Host information
     // -------------------------------------------------------------------------
     bool vm_poll;
 
@@ -161,13 +192,6 @@ void MonitorThread::do_message()
     set<int>        rediscovered_vms;
 
     ostringstream   oss;
-
-    host = hpool->get(host_id);
-
-    if ( host == 0 )
-    {
-        return;
-    }
 
     set<int> prev_rediscovered = host->get_prev_rediscovered_vms();
 

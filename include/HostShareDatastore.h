@@ -59,11 +59,18 @@ public:
     int from_xml_node(const xmlNodePtr node);
 
 private:
+
     long long disk_usage; /**< Disk allocated to VMs (in MB).        */
 
     long long max_disk;   /**< Total disk capacity (in MB)           */
     long long free_disk;  /**< Free disk from the IM monitor         */
     long long used_disk;  /**< Used disk from the IM monitor         */
+
+    /**
+     *  Update the contents of the template to reflect the current values
+     *  of the monitor metrics
+     */
+    void update();
 };
 
 
