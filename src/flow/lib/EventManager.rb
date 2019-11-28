@@ -26,9 +26,11 @@ class EventManager
     LOG_COMP = 'EM'
 
     ACTIONS = {
-        'WAIT_DEPLOY' => :wait_deploy,
-        'WAIT_UNDEPLOY' => :wait_undeploy,
-        'WAIT_COOLDOWN' => :wait_cooldown
+        'WAIT_DEPLOY'    => :wait_deploy,
+        'WAIT_UNDEPLOY'  => :wait_undeploy,
+        'WAIT_SCALEUP'   => :wait_scaleup,
+        'WAIT_SCALEDOWN' => :wait_scaledown,
+        'WAIT_COOLDOWN'  => :wait_cooldown
     }
 
     FAILURE_STATES = %w[
@@ -71,7 +73,8 @@ class EventManager
         @am.register_action(ACTIONS['WAIT_DEPLOY'], method('wait_deploy_action'))
         @am.register_action(ACTIONS['WAIT_UNDEPLOY'], method('wait_undeploy_action'))
         @am.register_action(ACTIONS['WAIT_COOLDOWN'], method('wait_cooldown'))
-
+        @am.register_action(ACTIONS['WAIT_SCALEUP'], method('wait_scaleup_action'))
+        @am.register_action(ACTIONS['WAIT_SCALEDOWN'], method('wait_scaledown_action'))
         Thread.new { @am.start_listener }
     end
 
@@ -90,7 +93,7 @@ class EventManager
 
         # Todo, check if OneGate confirmation is needed (trigger another action)
         @lcm.trigger_action(:deploy_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:deploy_faillure_cb, service_id, service_id, role_name) unless rc
+        @lcm.trigger_action(:deploy_failure_cb, service_id, service_id, role_name) unless rc
     end
 
     # Wait for nodes to be in DONE
@@ -102,7 +105,33 @@ class EventManager
         rc = wait(nodes, 'DONE', 'LCM_INIT')
 
         @lcm.trigger_action(:undeploy_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:undeploy_faillure_cb, service_id, service_id, role_name) unless rc
+        @lcm.trigger_action(:undeploy_failure_cb, service_id, service_id, role_name) unless rc
+    end
+
+    # Wait for nodes to be in RUNNING if OneGate check required it will trigger
+    # another action after VMs are RUNNING
+    # @param [Service] service the service
+    # @param [Role] the role which contains the VMs
+    # @param [Node] nodes the list of nodes (VMs) to wait for
+    # @param [Bool] up true if scalling up false otherwise
+    def wait_scaleup_action(service_id, role_name, nodes)
+        Log.info LOG_COMP, "Waiting #{nodes} to be (ACTIVE, RUNNING)"
+
+        rc = wait(nodes, 'ACTIVE', 'RUNNING')
+
+        # Todo, check if OneGate confirmation is needed (trigger another action)
+        @lcm.trigger_action(:scale_cb, service_id, service_id, role_name) if rc
+        @lcm.trigger_action(:scale_failure_cb, service_id, service_id, role_name) unless rc
+    end
+
+    def wait_scaledown_action(service_id, role_name, nodes)
+        Log.info LOG_COMP, "Waiting #{nodes} to be (DONE, LCM_INIT)"
+
+        rc = wait(nodes, 'DONE', 'LCM_INIT')
+
+        # Todo, check if OneGate confirmation is needed (trigger another action)
+        @lcm.trigger_action(:scale_cb, service_id, service_id, role_name) if rc
+        @lcm.trigger_action(:scale_failure_cb, service_id, service_id, role_name) unless rc
     end
 
     # Wait for nodes to be in DONE

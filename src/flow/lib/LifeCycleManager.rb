@@ -33,10 +33,12 @@ class ServiceLCM
 
         # Callbacks
         'DEPLOY_CB'           => :deploy_cb,
-        'DEPLOY_FAILURE_CB'   => :deploy_faillure_cb,
+        'DEPLOY_FAILURE_CB'   => :deploy_failure_cb,
         'UNDEPLOY_CB'         => :undeploy_cb,
-        'UNDEPLOY_FAILURE_CB' => :undeploy_faillure_cb,
-        'COOLDOWN_CB'         => :cooldown_cb
+        'UNDEPLOY_FAILURE_CB' => :undeploy_failure_cb,
+        'COOLDOWN_CB'         => :cooldown_cb,
+        'SCALE_CB'            => :scale_cb,
+        'SCALE_FAILURE_CB'    => :scale_failure_cb
     }
 
     def initialize(concurrency, cloud_auth)
@@ -53,6 +55,8 @@ class ServiceLCM
         @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
         @am.register_action(ACTIONS['UNDEPLOY_FAILURE_CB'], method('undeploy_failure_cb'))
         @am.register_action(ACTIONS['SCALE'], method('scale_action'))
+        @am.register_action(ACTIONS['SCALE_CB'], method('scale_cb'))
+        @am.register_action(ACTIONS['SCALE_FAILURE_CB'], method('scale_failure_cb'))
         @am.register_action(ACTIONS['COOLDOWN_CB'], method('cooldown_cb'))
 
         Thread.new { @am.start_listener }
@@ -154,6 +158,7 @@ class ServiceLCM
             end
 
             rc = nil
+            # TODO, validate role_name
             role = service.roles[role_name]
 
             cardinality_diff = cardinality - role.cardinality
@@ -190,19 +195,6 @@ class ServiceLCM
 
     def deploy_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
-            if service.roles[role_name].state == Service::STATE['SCALING']
-                service.set_state(Service::STATE['COOLDOWN'])
-                service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
-                @event_manager.trigger_action(:wait_cooldown,
-                                              service.id,
-                                              service.id,
-                                              role_name,
-                                              10) # TOO, config time
-                service.update
-
-                break
-            end
-
             service.roles[role_name].set_state(Role::STATE['RUNNING'])
 
             if service.all_roles_running?
@@ -275,6 +267,32 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
+    def scale_cb(service_id, role_name)
+        rc = @srv_pool.get(service_id) do |service|
+            service.set_state(Service::STATE['COOLDOWN'])
+            service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
+            @event_manager.trigger_action(:wait_cooldown,
+                                          service.id,
+                                          service.id,
+                                          role_name,
+                                          10) # TODO, config time
+            service.update
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def scale_failure_cb(service_id, role_name)
+        rc = @srv_pool.get(service_id) do |service|
+            service.set_state(Service::STATE['FAILED_SCALING'])
+            service.roles[role_name].set_state(Role::STATE['FAILED_SCALING'])
+
+            service.update
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
     def cooldown_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['RUNNING'])
@@ -313,12 +331,16 @@ class ServiceLCM
     # @param [Role::STATE] error_state new state of the role
     #                      if deployed unsuccessfuly
     def deploy_roles(roles, success_state, error_state, scale)
+        action = nil
+
+        if scale
+            action = :wait_scaleup
+        else
+            action = :wait_deploy
+        end
+
         roles.each do |_name, role|
             rc = role.deploy scale
-
-            File.open("/tmp/loga", "a") do |file|
-                file.write("Deployed nodes: #{rc}\n")
-            end
 
             if !rc[0]
                 role.set_state(Role::STATE[error_state])
@@ -327,7 +349,7 @@ class ServiceLCM
 
             role.set_state(Role::STATE[success_state])
 
-            @event_manager.trigger_action(:wait_deploy,
+            @event_manager.trigger_action(action,
                                           role.service.id,
                                           role.service.id,
                                           role.name,
@@ -338,6 +360,14 @@ class ServiceLCM
     end
 
     def undeploy_roles(roles, success_state, error_state, scale)
+        action = nil
+
+        if scale
+            action = :wait_scaledown
+        else
+            action = :wait_undeploy
+        end
+
         roles.each do |_name, role|
             rc = role.shutdown scale
 
@@ -349,7 +379,7 @@ class ServiceLCM
             role.set_state(Role::STATE[success_state])
 
             # TODO, take only subset of nodes which needs to be undeployed (new role.nodes_undeployed_ids ?)
-            @event_manager.trigger_action(:wait_undeploy,
+            @event_manager.trigger_action(action,
                                           role.service.id,
                                           role.service.id,
                                           role.name,
