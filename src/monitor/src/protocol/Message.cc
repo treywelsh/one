@@ -38,9 +38,11 @@ const EString<MonitorDriverMessages> Message<MonitorDriverMessages>::_type_str({
 
 template<>
 const EString<OpenNebulaMessages> Message<OpenNebulaMessages>::_type_str({
+    {"UNDEFINED", OpenNebulaMessages::UNDEFINED},
+    {"INIT", OpenNebulaMessages::INIT},
+    {"FINALIZE", OpenNebulaMessages::FINALIZE},
     {"ADD_HOST", OpenNebulaMessages::ADD_HOST},
     {"DEL_HOST", OpenNebulaMessages::DEL_HOST},
-    {"UNDEFINED", OpenNebulaMessages::UNDEFINED}
 });
 
 /* ************************************************************************** */

@@ -291,7 +291,6 @@ build_scripts = [
     'src/sunstone/public/locale/languages/SConstruct',
     'src/sunstone/public/SConstruct',
     'share/rubygems/SConstruct',
-    'src/im_mad/collectd/SConstruct',
     'src/client/SConstruct',
     'src/docker_machine/SConstruct',
     'src/monitor/SConstruct',

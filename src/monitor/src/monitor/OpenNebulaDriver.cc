@@ -14,92 +14,53 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "ListenerThread.h"
+#include "OpenNebulaDriver.h"
 
-#include <unistd.h>
-#include <sys/socket.h>
 
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-const size_t ListenerThread::MESSAGE_SIZE = 100000;
-
-pthread_mutex_t ListenerThread::mutex = PTHREAD_MUTEX_INITIALIZER;
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-void ListenerThread::monitor_loop()
+OpenNebulaDriver::OpenNebulaDriver()
+    : oned_reader(0, [](std::unique_ptr<Message<OpenNebulaMessages>> ms) {
+            NebulaLog::log("MON", Log::WARNING, "Received undefined message: " + ms->payload());
+        })
 {
-    char   buffer[MESSAGE_SIZE];
-    size_t rc;
-
-    struct sockaddr addr;
-    socklen_t addr_size = sizeof(struct sockaddr);
-
-    while(true)
-    {
-        rc = recvfrom(socket, buffer, MESSAGE_SIZE, 0, &addr, &addr_size);
-
-        if (rc > 0 && rc < MESSAGE_SIZE)
-        {
-            lock();
-
-            write(fd, buffer, rc);
-
-            unlock();
-        }
-    }
+    using namespace std::placeholders; // for _1
+    oned_reader.register_action(OpenNebulaMessages::INIT, bind(&OpenNebulaDriver::process_init, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::FINALIZE, bind(&OpenNebulaDriver::process_finalize, this, _1));
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-extern "C" void * listener_main(void *arg)
+void OpenNebulaDriver::start_driver()
 {
-    ListenerThread * listener = static_cast<ListenerThread *>(arg);
-
-    listener->monitor_loop();
-
-    return 0;
-};
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-ListenerPool::~ListenerPool()
-{
-    std::vector<ListenerThread>::iterator it;
-
-    for(it = listeners.begin() ; it != listeners.end(); ++it)
-    {
-        pthread_cancel((*it).thread_id());
-    }
-};
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-void ListenerPool::start_pool()
-{
-    pthread_attr_t attr;
-    pthread_t id;
-
-    std::vector<ListenerThread>::iterator it;
-
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-    for(it = listeners.begin() ; it != listeners.end(); ++it)
-    {
-        pthread_create(&id, &attr, listener_main, (void *)&(*it));
-
-        (*it).thread_id(id);
-    }
-
-    pthread_attr_destroy(&attr);
+    oned_reader.action_loop(false);
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+void OpenNebulaDriver::process_init(std::unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    write2one("INIT SUCCESS\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void OpenNebulaDriver::process_finalize(std::unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    write2one("FINALIZE SUCCESS\n");
+    stop_driver();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void OpenNebulaDriver::stop_driver()
+{
+    terminate = true;
+
+    // Close comminication pipes
+    close(0);
+    close(1);
+}
 

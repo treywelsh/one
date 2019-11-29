@@ -14,23 +14,67 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef OPENNEBULA_STREAM_H
-#define OPENNEBULA_STREAM_H
+#ifndef _OPENNEBULA_DRIVER_H
+#define _OPENNEBULA_DRIVER_H
 
+#include <atomic>
+#include <string>
+#include <unistd.h>
+
+#include "OpenNebulaStream.h"
 #include "StreamManager.h"
 
 /**
- * Messages between the Monitor daemon and OpenNebula daemon
+ * Class providing interface to OpenNebula deamon
+ * To handle oned messages register callbacks in oned_reader
  */
-enum class OpenNebulaMessages : unsigned short int
+class OpenNebulaDriver
 {
-    UNDEFINED = 0,
-    INIT      = 1,
-    FINALIZE  = 2,
-    ADD_HOST  = 3,
-    DEL_HOST  = 4,
+public:
+
+    OpenNebulaDriver();
+
+    virtual ~OpenNebulaDriver()
+    {
+        stop_driver();
+    }
+
+    /**
+     * Start reading messages from oned, blocking call
+     */
+    void start_driver();
+
+    // todo method for write Message<E> to oned
+
+protected:
+
+    /**
+     * Process INIT message from oned, send SUCCESS response
+     */
+    void process_init(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+
+    /**
+     * Process FINALIZE message from oned, send SUCCESS response,
+     * terminate execution loop
+     */
+    void process_finalize(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+
+    /**
+     * Write string message to oned
+     */
+    void write2one(const std::string& buf) const
+    {
+        write(1, buf.c_str(), buf.size());
+    }
+
+    /**
+     * Stops the driver main execution loop
+     */
+    void stop_driver();
+
+    std::atomic<bool> terminate{false};
+
+    one_stream_t oned_reader;
 };
 
-typedef StreamManager<OpenNebulaMessages> one_stream_t;
-
-#endif /*OPENNEBULA_STREAM_H*/
+#endif // _OPENNEBULA_DRIVER_H

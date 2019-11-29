@@ -22,18 +22,31 @@
 #include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
-#include "OpenNebulaStream.h"
-#include "MonitorDriver.h"
 #include "DriverManager.h"
+#include "MonitorDriver.h"
+#include "OpenNebulaDriver.h"
+#include "OpenNebulaStream.h"
 
-class Monitor : public NebulaService
+class Monitor : public NebulaService, public OpenNebulaDriver
 {
 public:
+    /**
+     *  Read configuration file and starts monitornig. (Blocking call)
+     */
     void start();
 
+    /**
+     *  The main execution loop, handles the monitoring logic
+     */
     void thread_execute();
 
 protected:
+    /**
+     *  Reads data from oned
+     *   @return false if the OpenNebula service is not available
+     **/
+    bool pull_from_oned();
+
     // Oned message handlers
     void process_add_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
     void process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
@@ -47,6 +60,11 @@ protected:
     void process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
+    /**
+     *  Stop the driver, stop all running threads
+     **/
+    void stop();
+
     std::unique_ptr<std::thread> monitor_thread;
 
     // ---------------------------------------------------------------
@@ -59,9 +77,10 @@ private:
 
     std::unique_ptr<DriverManager> dm;
 
+    /**
+     *  Stream receiving UDP data from monitor agents.
+     */
     std::unique_ptr<udp_streamer_t> udp_stream;
-
-    bool terminate = false;
 };
 
 #endif // MONITOR_H_

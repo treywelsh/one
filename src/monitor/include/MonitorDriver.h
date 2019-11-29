@@ -38,4 +38,4 @@ typedef Driver<MonitorDriverMessages> driver_t;
 
 typedef UDPStream<MonitorDriverMessages> udp_streamer_t;
 
-#endif /*MONIOTR_DRIVER_H_*/
+#endif /*MONITOR_DRIVER_H_*/

@@ -27,7 +27,8 @@ lib_name='nebula_monitor'
 source_files=[
     'DriverManager.cc',
     'Monitor.cc',
-    'MonitorConfigTemplate.cc']
+    'MonitorConfigTemplate.cc',
+    'OpenNebulaDriver.cc']
 mon_env.StaticLibrary(lib_name, source_files)
 
 # Build daemon

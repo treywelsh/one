@@ -193,41 +193,15 @@ void Monitor::start()
         if (udp_stream->action_loop(threads, error) != 0)
         {
             NebulaLog::error("MON", "Unable to init UDP action listener: " + error);
+            return;
         }
     }
 
-    // -----------------------------------------------------------
-    // Close stds, we no longer need them
-    // -----------------------------------------------------------
-    if (NebulaLog::log_type() != NebulaLog::STD )
-    {
-        int fd = open("/dev/null", O_RDWR);
+    // Close stds in drivers
+    fcntl(0, F_SETFD, FD_CLOEXEC);
+    fcntl(1, F_SETFD, FD_CLOEXEC);
+    fcntl(2, F_SETFD, FD_CLOEXEC);
 
-        dup2(fd, 0);
-        dup2(fd, 1);
-        dup2(fd, 2);
-
-        close(fd);
-
-        fcntl(0, F_SETFD, 0); // Keep them open across exec funcs
-        fcntl(1, F_SETFD, 0);
-        fcntl(2, F_SETFD, 0);
-    }
-    else
-    {
-        fcntl(0, F_SETFD, FD_CLOEXEC);
-        fcntl(1, F_SETFD, FD_CLOEXEC);
-        fcntl(2, F_SETFD, FD_CLOEXEC);
-    }
-
-    // -----------------------------------------------------------
-    // Block all signals before creating any Nebula thread
-    // -----------------------------------------------------------
-    sigset_t    mask;
-    int         signal;
-
-    sigfillset(&mask);
-    pthread_sigmask(SIG_BLOCK, &mask, NULL);
     one_util::SSLMutex::initialize();
 
     // -----------------------------------------------------------
@@ -237,40 +211,16 @@ void Monitor::start()
     NebulaLog::log("MON", Log::INFO, "Starting monitor loop...");
 
     monitor_thread.reset(new std::thread(&Monitor::thread_execute, this));
-    // pthread_attr_t pattr;
-    // pthread_attr_init(&pattr);
-    // pthread_attr_setdetachstate(&pattr, PTHREAD_CREATE_JOINABLE);
-
-    // int rc = pthread_create(&monitor_thread, &pattr, scheduler_action_loop, (void *) this);
-
-    // if (rc != 0)
-    // {
-    //     NebulaLog::log("MON", Log::ERROR,
-    //         "Could not start monitor loop, exiting");
-
-    //     return;
-    // }
 
     // -----------------------------------------------------------
-    // Wait for a SIGTERM or SIGINT signal
+    // Start oned reader loop
     // -----------------------------------------------------------
 
-    sigemptyset(&mask);
+    oned_reader.register_action(OpenNebulaMessages::ADD_HOST, bind(&Monitor::process_add_host, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::DEL_HOST, bind(&Monitor::process_del_host, this, _1));
+    start_driver(); // blocking call
 
-    sigaddset(&mask, SIGINT);
-    sigaddset(&mask, SIGTERM);
-
-    sigwait(&mask, &signal);
-
-    terminate = true;
-    //am.finalize();
-
-    monitor_thread->join();
-    dm->stop();
-
-    xmlCleanupParser();
-
-    NebulaLog::finalize_log_system();
+    stop();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -278,25 +228,18 @@ void Monitor::start()
 
 void Monitor::thread_execute()
 {
-    // Do initial pull from oned, then read only changes
-    hpool->update();
-
-    for (auto& host : hpool->get_objects())
+    // Initial pull from oned
+    if (pull_from_oned())
     {
-        dm->start_monitor(static_cast<HostBase*>(host.second.get()), true);
+        NebulaLog::info("MON", "Succesfully connected to oned");
+    }
+    else
+    {
+        NebulaLog::error("MON", "Unable to connect to oned!");
     }
 
-    // Maybe it's not necessery to have two threads (Monitor::thread_execute
-    // and OnedStream::run), we will see later
-    one_stream_t oned_reader(0, [](std::unique_ptr<Message<OpenNebulaMessages>> ms) {
-        NebulaLog::log("MON", Log::WARNING, "Received undefined message: " + ms->payload());
-    });
-
-    oned_reader.register_action(OpenNebulaMessages::ADD_HOST, std::bind(&Monitor::process_add_host, this, _1));
-    oned_reader.register_action(OpenNebulaMessages::DEL_HOST, std::bind(&Monitor::process_del_host, this, _1));
-    auto oned_msg_thread = std::thread(&one_stream_t::action_loop, &oned_reader, false);
-    oned_msg_thread.detach();
-
+    // Replace this loop with some timer action,
+    // which should do the monitoring logic
     while (!terminate)
     {
         const auto& hosts = hpool->get_objects();
@@ -321,7 +264,31 @@ void Monitor::thread_execute()
     {
         dm->stop_monitor(static_cast<HostBase*>(host.second.get()));
     }
+}
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+bool Monitor::pull_from_oned()
+{
+    int oned_connected = -1;
+    int retries = 5;
+    do
+    {
+        sleep(2);
+        oned_connected = hpool->update();
+        if (oned_connected != 0 && retries > 0)
+        {
+            NebulaLog::warn("MON", "Unable to connect to oned, trying again");
+        }
+    } while (oned_connected != 0 || retries-- > 0);
+
+    for (auto& host : hpool->get_objects())
+    {
+        dm->start_monitor(static_cast<HostBase*>(host.second.get()), true);
+    }
+
+    return oned_connected == 0;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -450,4 +417,19 @@ void Monitor::process_state_vm(std::unique_ptr<Message<MonitorDriverMessages>> m
 void Monitor::process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
     NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void Monitor::stop()
+{
+    stop_driver();
+
+    monitor_thread->join();
+    dm->stop();
+
+    xmlCleanupParser();
+
+    NebulaLog::finalize_log_system();
 }
