@@ -26,7 +26,8 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include <sys/ioctl.h>
 
 #include "Message.h"
@@ -81,8 +82,10 @@ public:
     /**
      *  Reads messages from the stream and execute callbacks. This method should
      *  be run in a separated thread.
+     *    @param concurrency number of concurrent actions, use 0 to run all the
+     *    actions sequetianlly in this thread.
      */
-    virtual int action_loop(bool threaded);
+    virtual int action_loop(int concurrency);
 
     /**
      *  Sets the file descriptor for the stream
@@ -108,6 +111,12 @@ protected:
 
 private:
     int _fd;
+
+    std::mutex _mutex;
+
+    std::condition_variable _cond;
+
+    int _concurrency;
 
     std::map<E, callback_t > actions;
 
@@ -149,8 +158,27 @@ void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg, bool thr)
 
     if (thr)
     {
-        std::thread action_thread([=]{
+        std::unique_lock<std::mutex> lock(_mutex);
+
+        while( _concurrency <= 0 )
+        {
+            _cond.wait(lock);
+        }
+
+        --_concurrency;
+
+        lock.unlock();
+
+        std::thread action_thread([this, action, mptr]{
             action(std::unique_ptr<Message<E>>{mptr});
+
+            std::unique_lock<std::mutex> lock(_mutex);
+
+            _concurrency++;
+
+            lock.unlock();
+
+            _cond.notify_one();
         });
 
         action_thread.detach();
@@ -165,8 +193,11 @@ void StreamManager<E>::do_action(std::unique_ptr<Message<E> >& msg, bool thr)
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int StreamManager<E>::action_loop(bool threaded)
+int StreamManager<E>::action_loop(int concurrency)
 {
+    bool threaded = concurrency > 0;
+    _concurrency  = concurrency;
+
     while (true)
     {
         std::string line;

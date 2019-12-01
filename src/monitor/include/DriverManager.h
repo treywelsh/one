@@ -28,6 +28,7 @@ public:
     DriverManager() {}
 
     int load_drivers(std::vector<const VectorAttribute*> &conf);
+
     driver_t* get_driver(const std::string& name);
 
     /**

@@ -220,7 +220,15 @@ void Monitor::start()
     oned_reader.register_action(OpenNebulaMessages::DEL_HOST, bind(&Monitor::process_del_host, this, _1));
     start_driver(); // blocking call
 
-    stop();
+    //signal monitor_thread
+
+    monitor_thread->join();
+
+    dm->stop();
+
+    xmlCleanupParser();
+
+    NebulaLog::finalize_log_system();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -240,7 +248,7 @@ void Monitor::thread_execute()
 
     // Replace this loop with some timer action,
     // which should do the monitoring logic
-    while (!terminate)
+    while (true)
     {
         const auto& hosts = hpool->get_objects();
         NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
@@ -417,19 +425,4 @@ void Monitor::process_state_vm(std::unique_ptr<Message<MonitorDriverMessages>> m
 void Monitor::process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
     NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-void Monitor::stop()
-{
-    stop_driver();
-
-    monitor_thread->join();
-    dm->stop();
-
-    xmlCleanupParser();
-
-    NebulaLog::finalize_log_system();
 }

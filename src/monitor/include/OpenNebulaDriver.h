@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 #include "OpenNebulaStream.h"
-#include "StreamManager.h"
+#include "NebulaLog.h"
 
 /**
  * Class providing interface to OpenNebula deamon
@@ -32,49 +32,70 @@ class OpenNebulaDriver
 {
 public:
 
-    OpenNebulaDriver();
-
-    virtual ~OpenNebulaDriver()
+    OpenNebulaDriver() : oned_reader(0, &OpenNebulaDriver::_undefined)
     {
-        stop_driver();
+        oned_reader.register_action(OpenNebulaMessages::INIT,
+                &OpenNebulaDriver::_init);
+
+        oned_reader.register_action(OpenNebulaMessages::FINALIZE,
+                &OpenNebulaDriver::_finalize);
     }
 
-    /**
-     * Start reading messages from oned, blocking call
-     */
-    void start_driver();
+    virtual ~OpenNebulaDriver() = default;
 
-    // todo method for write Message<E> to oned
+    /**
+     * Start reading messages from oned, blocking call. Messages will be
+     * processed sequentially in the main thread.
+     */
+    void start_driver()
+    {
+        oned_reader.action_loop(0);
+    }
+
+    // TODO method for write Message<E> to oned
 
 protected:
+    using message_t = std::unique_ptr<Message<OpenNebulaMessages>>;
+
+    /**
+     *  Streamer for stdin
+     */
+    one_stream_t oned_reader;
 
     /**
      * Process INIT message from oned, send SUCCESS response
      */
-    void process_init(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    static void _init(message_t msg)
+    {
+        write2one("INIT SUCCESS\n");
+    }
 
     /**
      * Process FINALIZE message from oned, send SUCCESS response,
      * terminate execution loop
      */
-    void process_finalize(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    static void _finalize(message_t msg)
+    {
+        write2one("FINALIZE SUCCESS\n");
+
+        close(0); //will end start_driver()
+    }
+
+    /**
+     * Default action for undefined messages
+     */
+    static void _undefined(message_t msg)
+    {
+        NebulaLog::log("MON", Log::WARNING, "Undefined message: " + msg->payload());
+    }
 
     /**
      * Write string message to oned
      */
-    void write2one(const std::string& buf) const
+    static void write2one(const std::string& buf)
     {
         write(1, buf.c_str(), buf.size());
     }
-
-    /**
-     * Stops the driver main execution loop
-     */
-    void stop_driver();
-
-    std::atomic<bool> terminate{false};
-
-    one_stream_t oned_reader;
 };
 
 #endif // _OPENNEBULA_DRIVER_H

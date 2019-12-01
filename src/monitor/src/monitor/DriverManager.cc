@@ -33,8 +33,9 @@ int DriverManager::load_drivers(vector<const VectorAttribute*> &conf)
         auto name = vattr->vector_value("NAME");
         auto exec = vattr->vector_value("EXECUTABLE");
         auto args = vattr->vector_value("ARGUMENTS");
-        bool threaded;
-        vattr->vector_value("THREADED", threaded, false);
+        int  threads;
+
+        vattr->vector_value("THREADS", threads, 0);
 
         NebulaLog::info("InM", "Loading driver: " + name);
 
@@ -54,7 +55,8 @@ int DriverManager::load_drivers(vector<const VectorAttribute*> &conf)
             NebulaLog::error("InM", "File not exists: " + exec);
             return -1;
         }
-        auto driver = new driver_t(exec, args, threaded);
+
+        auto driver = new driver_t(exec, args, threads);
 
         auto rc = drivers.insert({name, driver});
 

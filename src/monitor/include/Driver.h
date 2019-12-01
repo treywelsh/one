@@ -25,6 +25,7 @@
 
 #include <string>
 #include <thread>
+#include <atomic>
 #include "StreamManager.h"
 
 /**
@@ -39,11 +40,13 @@ public:
      *  A call to the start() method is needed to start the driver
      *    @param c the command to execute the driver
      *    @param a the arguments for the command
+     *    @param th true to execute driver action in a thread
+     *    @param ct max number of concurrent threads
      */
-    Driver(const std::string& c, const std::string& a, bool threaded)
+    Driver(const std::string& c, const std::string& a, int ct)
         : cmd(c)
         , arg(a)
-        , threaded(threaded)
+        , concurrency(ct)
         , pid(-1)
     {}
 
@@ -59,13 +62,13 @@ public:
             return -1;
         }
 
-        start_listener(threaded);
+        start_listener();
 
         return 0;
     }
 
     /**
-     *  Stop the driver and the listner thread
+     *  Stop the driver and the listener thread
      */
     void stop()
     {
@@ -113,7 +116,7 @@ private:
 
     std::string arg;
 
-    bool        threaded;
+    int  concurrency;
 
     /**
      *  Process ID of the driver
@@ -149,7 +152,7 @@ private:
      *  Starts the listener thread. The thread will reload the driver process if
      *  it fails (EOF on pipe)
      */
-    void start_listener(bool threaded);
+    void start_listener();
 };
 
 /* -------------------------------------------------------------------------- */
@@ -296,12 +299,12 @@ int Driver<E>::start_driver(std::string& error)
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-void Driver<E>::start_listener(bool threaded)
+void Driver<E>::start_listener()
 {
     streamer.fd(from_drv);
 
-    stream_thr = std::thread([this, threaded](){
-        while(streamer.action_loop(threaded) == -1 && !terminate.load())
+    stream_thr = std::thread([this](){
+        while(streamer.action_loop(concurrency) == -1 && !terminate.load())
         {
             std::string error;
 
