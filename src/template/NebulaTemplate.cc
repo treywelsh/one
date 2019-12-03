@@ -15,6 +15,7 @@
 /* -------------------------------------------------------------------------- */
 
 #include "NebulaTemplate.h"
+#include <iostream>
 
 using namespace std;
 

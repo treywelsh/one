@@ -67,6 +67,7 @@ add_bison(main_env)
 # Include dirs
 main_env.Append(CPPPATH=[
     cwd+'/include',
+    cwd+'/src/monitor/include',
     cwd+'/src/parsers'
 ])
 
@@ -110,7 +111,8 @@ main_env.Append(LIBPATH=[
     cwd+'/src/vrouter',
     cwd+'/src/market',
     cwd+'/src/ipamm',
-    cwd+'/src/data_model'
+    cwd+'/src/data_model',
+    cwd+'/src/monitor/src/protocol'
 ])
 
 # Compile flags

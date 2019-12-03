@@ -48,8 +48,11 @@ void InformationManagerDriver::monitor(int           oid,
 
     os << "MONITOR " << oid << " " << host << " " << dsloc << " " << update << endl;
 
-    write(os);
+    Mad::write(os);
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 void InformationManagerDriver::stop_monitor(int oid, const string& host) const
 {
@@ -57,7 +60,7 @@ void InformationManagerDriver::stop_monitor(int oid, const string& host) const
 
     os << "STOPMONITOR " << oid << " " << host << " " << endl;
 
-    write(os);
+    Mad::write(os);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -162,4 +165,12 @@ void InformationManagerDriver::recover()
 {
     NebulaLog::log("InM", Log::ERROR,
                    "Information driver crashed, recovering...");
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManagerDriver::write(Message<OpenNebulaMessages> &msg) const
+{
+    msg.write_to(nebula_mad_pipe, false);
 }

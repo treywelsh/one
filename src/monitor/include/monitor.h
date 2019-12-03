@@ -48,7 +48,7 @@ protected:
     bool pull_from_oned();
 
     // Oned message handlers
-    void process_add_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    void process_update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
     void process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
 
     // Monitor driver message handlers

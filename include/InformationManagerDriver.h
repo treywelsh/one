@@ -22,6 +22,7 @@
 #include <sstream>
 
 #include "Mad.h"
+#include "OpenNebulaStream.h"
 
 using namespace std;
 
@@ -72,6 +73,11 @@ public:
      *    @param host the hostname
      */
     void stop_monitor(int oid, const string& host) const;
+
+    /**
+     *  Send message to o monitor driver
+     */
+    void write(Message<OpenNebulaMessages> &msg) const;
 
 private:
     friend class InformationManager;

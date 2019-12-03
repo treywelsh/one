@@ -19,6 +19,7 @@
 #include "Nebula.h"
 #include "HostPool.h"
 #include "RaftManager.h"
+#include "OpenNebulaStream.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -152,6 +153,44 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
     imd->monitor(host->get_oid(), host->get_name(), dsloc, update_remotes);
 
     return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::update_host(Host *host)
+{
+    auto imd = get("monitor");
+
+    if (!imd)
+    {
+        return;
+    }
+
+    string tmp;
+    Message<OpenNebulaMessages> msg;
+    msg.type(OpenNebulaMessages::UPDATE_HOST);
+    msg.payload(host->to_xml(tmp));
+    imd->write(msg);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::delete_host(Host *host)
+{
+    auto imd = get("monitor");
+
+    if (!imd)
+    {
+        return;
+    }
+
+    string tmp;
+    Message<OpenNebulaMessages> msg;
+    msg.type(OpenNebulaMessages::DEL_HOST);
+    msg.payload(host->to_xml(tmp));
+    imd->write(msg);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -41,7 +41,7 @@ const EString<OpenNebulaMessages> Message<OpenNebulaMessages>::_type_str({
     {"UNDEFINED", OpenNebulaMessages::UNDEFINED},
     {"INIT", OpenNebulaMessages::INIT},
     {"FINALIZE", OpenNebulaMessages::FINALIZE},
-    {"ADD_HOST", OpenNebulaMessages::ADD_HOST},
+    {"UPDATE_HOST", OpenNebulaMessages::UPDATE_HOST},
     {"DEL_HOST", OpenNebulaMessages::DEL_HOST},
 });
 

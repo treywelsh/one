@@ -19,6 +19,7 @@
 #include "Client.h"
 #include "BaseObject.h"
 #include "SqlDB.h"
+#include "NebulaLog.h"
 
 #include <memory>
 

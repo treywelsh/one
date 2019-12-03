@@ -28,6 +28,7 @@
 #include "NebulaLog.h"
 #include "GroupPool.h"
 #include "ClusterPool.h"
+#include "InformationManager.h"
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -115,6 +116,9 @@ int HostPool::allocate (
             Nebula::instance().get_hm()->trigger(HMAction::SEND_EVENT, *event);
 
             delete event;
+
+            auto *im = Nebula::instance().get_im();
+            im->update_host(host);
 
             host->unlock();
         }

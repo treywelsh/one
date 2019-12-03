@@ -113,6 +113,16 @@ public:
      */
     int start_monitor(Host * host, bool update_remotes);
 
+    /**
+     *  Send host info to monitor
+     */
+    void update_host(Host *host);
+
+    /**
+     *  Send host delete message to monitor
+     */
+    void delete_host(Host *host);
+
 private:
     /**
      *  Thread id for the Information Manager

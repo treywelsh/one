@@ -92,17 +92,17 @@ int HostBase::init_attributes()
 
     // ------------ Host Share ---------------
     vector<xmlNodePtr> content;
-    ObjectXML::get_nodes("/HOST/HOST_SHARE", content);
+    // ObjectXML::get_nodes("/HOST/HOST_SHARE", content);
 
-    if (content.empty())
-    {
-        return -1;
-    }
+    // if (content.empty())
+    // {
+    //     return -1;
+    // }
 
     // rc += _host_share.from_xml_node(content[0]);
 
-    ObjectXML::free_nodes(content);
-    content.clear();
+    // ObjectXML::free_nodes(content);
+    // content.clear();
 
     // ------------ Host Template ---------------
     ObjectXML::get_nodes("/HOST/TEMPLATE", content);

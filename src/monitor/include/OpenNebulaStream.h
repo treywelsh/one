@@ -27,7 +27,7 @@ enum class OpenNebulaMessages : unsigned short int
     UNDEFINED = 0,
     INIT      = 1,
     FINALIZE  = 2,
-    ADD_HOST  = 3,
+    UPDATE_HOST = 3,
     DEL_HOST  = 4,
 };
 

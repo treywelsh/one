@@ -216,7 +216,7 @@ void Monitor::start()
     // Start oned reader loop
     // -----------------------------------------------------------
 
-    oned_reader.register_action(OpenNebulaMessages::ADD_HOST, bind(&Monitor::process_add_host, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::UPDATE_HOST, bind(&Monitor::process_update_host, this, _1));
     oned_reader.register_action(OpenNebulaMessages::DEL_HOST, bind(&Monitor::process_del_host, this, _1));
     start_driver(); // blocking call
 
@@ -302,10 +302,21 @@ bool Monitor::pull_from_oned()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void Monitor::process_add_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
+void Monitor::process_update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
+    HostBase host(msg->payload()); // for the first step we need only oid, not whole msg
+
+    auto h = hpool->get(host.oid());
+    if (h)
+    {
+        h->from_xml(msg->payload());
+    }
+    else
+    {
+        hpool->add_object(msg->payload());
+    }
+
     // todo Thread safety, lock here or inside pools?
-    hpool->add_object(msg->payload());
 }
 
 /* -------------------------------------------------------------------------- */
