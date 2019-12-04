@@ -19,7 +19,7 @@
 #include "Nebula.h"
 #include "HostPool.h"
 #include "RaftManager.h"
-#include "OpenNebulaStream.h"
+#include "OpenNebulaMessages.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>

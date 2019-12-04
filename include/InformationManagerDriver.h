@@ -22,7 +22,7 @@
 #include <sstream>
 
 #include "Mad.h"
-#include "OpenNebulaStream.h"
+#include "OpenNebulaMessages.h"
 
 using namespace std;
 

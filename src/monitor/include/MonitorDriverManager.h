@@ -18,7 +18,7 @@
 #define MONITOR_DRIVER_MANAGER_H_
 
 #include "DriverManager.h"
-#include "MonitorDriver.h"
+#include "MonitorDriverMessages.h"
 #include "HostBase.h"
 
 class MonitorDriverManager : public DriverManager<MonitorDriverMessages>

@@ -23,9 +23,9 @@
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
 #include "MonitorDriverManager.h"
-#include "MonitorDriver.h"
+#include "MonitorDriverMessages.h"
 #include "OpenNebulaDriver.h"
-#include "OpenNebulaStream.h"
+#include "OpenNebulaMessages.h"
 
 class Monitor : public NebulaService, public OpenNebulaDriver
 {

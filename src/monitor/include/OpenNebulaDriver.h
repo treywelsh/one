@@ -21,7 +21,7 @@
 #include <string>
 #include <unistd.h>
 
-#include "OpenNebulaStream.h"
+#include "OpenNebulaMessages.h"
 #include "NebulaLog.h"
 
 /**

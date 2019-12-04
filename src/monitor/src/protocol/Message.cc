@@ -22,8 +22,8 @@
 #include <zlib.h>
 
 #include "Message.h"
-#include "MonitorDriver.h"
-#include "OpenNebulaStream.h"
+#include "MonitorDriverMessages.h"
+#include "OpenNebulaMessages.h"
 
 template<>
 const EString<MonitorDriverMessages> Message<MonitorDriverMessages>::_type_str({
