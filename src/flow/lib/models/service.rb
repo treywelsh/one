@@ -234,7 +234,6 @@ module OpenNebula
                 @roles.each do |_name, role|
                     if role.state == Role::STATE['FAILED_DEPLOYING']
                         role.set_state(Role::STATE['PENDING'])
-                        role.recover_deployment
                     end
                 end
 
@@ -243,7 +242,6 @@ module OpenNebula
             elsif state == Service::STATE['FAILED_SCALING']
                 @roles.each do |_name, role|
                     if role.state == Role::STATE['FAILED_SCALING']
-                        role.recover_scale
                         role.set_state(Role::STATE['SCALING'])
                     end
                 end
@@ -274,13 +272,10 @@ module OpenNebula
                         role.recover_warning
                     end
                 end
-
             else
-                return OpenNebula::Error.new('Action recover: Wrong state' \
+                OpenNebula::Error.new('Action recover: Wrong state' \
                                              " #{state_str}")
             end
-
-            update
         end
 
         # Delete the service. All the VMs are also deleted from OpenNebula.

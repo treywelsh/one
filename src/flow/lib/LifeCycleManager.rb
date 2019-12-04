@@ -30,22 +30,26 @@ class ServiceLCM
         'DEPLOY'   => :deploy,
         'UNDEPLOY' => :undeploy,
         'SCALE'    => :scale,
+        'RECOVER'  => :recover,
 
         # Callbacks
-        'DEPLOY_CB'           => :deploy_cb,
-        'DEPLOY_FAILURE_CB'   => :deploy_failure_cb,
-        'UNDEPLOY_CB'         => :undeploy_cb,
-        'UNDEPLOY_FAILURE_CB' => :undeploy_failure_cb,
-        'COOLDOWN_CB'         => :cooldown_cb,
-        'SCALE_CB'            => :scale_cb,
-        'SCALE_FAILURE_CB'    => :scale_failure_cb
+        'DEPLOY_CB'            => :deploy_cb,
+        'DEPLOY_FAILURE_CB'    => :deploy_failure_cb,
+        'UNDEPLOY_CB'          => :undeploy_cb,
+        'UNDEPLOY_FAILURE_CB'  => :undeploy_failure_cb,
+        'COOLDOWN_CB'          => :cooldown_cb,
+        'SCALEUP_CB'           => :scaleup_cb,
+        'SCALEUP_FAILURE_CB'   => :scaleup_failure_cb,
+        'SCALEDOWN_CB'         => :scaledown_cb,
+        'SCALEDOWN_FAILURE_CB' => :scaledown_failure_cb
     }
 
     def initialize(concurrency, cloud_auth)
         @cloud_auth = cloud_auth
+        @client = @cloud_auth.client
         @event_manager = nil
         @am = ActionManager.new(concurrency, true)
-        @srv_pool = ServicePool.new(@cloud_auth.client)
+        @srv_pool = ServicePool.new(@client)
 
         # Register Action Manager actions
         @am.register_action(ACTIONS['DEPLOY'], method('deploy_action'))
@@ -55,9 +59,12 @@ class ServiceLCM
         @am.register_action(ACTIONS['UNDEPLOY_CB'], method('undeploy_cb'))
         @am.register_action(ACTIONS['UNDEPLOY_FAILURE_CB'], method('undeploy_failure_cb'))
         @am.register_action(ACTIONS['SCALE'], method('scale_action'))
-        @am.register_action(ACTIONS['SCALE_CB'], method('scale_cb'))
-        @am.register_action(ACTIONS['SCALE_FAILURE_CB'], method('scale_failure_cb'))
+        @am.register_action(ACTIONS['SCALEUP_CB'], method('scaleup_cb'))
+        @am.register_action(ACTIONS['SCALEUP_FAILURE_CB'], method('scaleup_failure_cb'))
+        @am.register_action(ACTIONS['SCALEDOWN_CB'], method('scaledown_cb'))
+        @am.register_action(ACTIONS['SCALEDOWN_FAILURE_CB'], method('scaledown_failure_cb'))
         @am.register_action(ACTIONS['COOLDOWN_CB'], method('cooldown_cb'))
+        @am.register_action(ACTIONS['RECOVER'], method('recover_action'))
 
         Thread.new { @am.start_listener }
     end
@@ -189,6 +196,29 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
+    def recover_action(service_id)
+        state = ''
+
+        # TODO, kill other proceses? (other recovers)
+        rc = @srv_pool.get(service_id) do |service|
+            state = service.state
+
+            case state
+            when Service::STATE['FAILED_DEPLOYING']
+                recover_deploy(service)
+            when Service::STATE['FAILED_UNDEPLOYING']
+                recover_undeploy(service)
+            when Service::STATE['FAILED_SCALING']
+                recover_scale(service)
+            else
+                return OpenNebula::Error.new('Recover action is not ' \
+                            "available for state #{service.state_str}")
+            end
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
     ############################################################################
     # Callbacks
     ############################################################################
@@ -220,22 +250,14 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
-    def undeploy_cb(service_id, role_name)
+    def undeploy_cb(service_id, role_name, nodes)
         rc = @srv_pool.get(service_id) do |service|
-            if service.roles[role_name].state == Service::STATE['SCALING']
-                service.set_state(Service::STATE['COOLDOWN'])
-                service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
-                @event_manager.trigger_action(:wait_cooldown,
-                                              service.id,
-                                              service.id,
-                                              role_name,
-                                              10) # TOO, config time
-                service.update
-
-                break
-            end
-
             service.roles[role_name].set_state(Role::STATE['DONE'])
+
+            service.roles[role_name].nodes.delete_if do |node|
+                !nodes[:failure].include?(node['deploy_id']) &&
+                    nodes[:successful].include?(node['deploy_id'])
+            end
 
             if service.all_roles_done?
                 rc = service.delete_networks
@@ -256,10 +278,15 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
-    def undeploy_failure_cb(service_id, role_name)
+    def undeploy_failure_cb(service_id, role_name, nodes)
         rc = @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_UNDEPLOYING'])
+
+            service.roles[role_name].nodes.delete_if do |node|
+                !nodes[:failure].include?(node['deploy_id']) &&
+                    nodes[:successful].include?(node['deploy_id'])
+            end
 
             service.update
         end
@@ -267,7 +294,7 @@ class ServiceLCM
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
-    def scale_cb(service_id, role_name)
+    def scaleup_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['COOLDOWN'])
             service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
@@ -276,16 +303,64 @@ class ServiceLCM
                                           service.id,
                                           role_name,
                                           10) # TODO, config time
+
+            service.roles[role_name].clean_scale_way
             service.update
         end
 
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
     end
 
-    def scale_failure_cb(service_id, role_name)
+    def scaledown_cb(service_id, role_name, nodes)
+        rc = @srv_pool.get(service_id) do |service|
+            service.set_state(Service::STATE['COOLDOWN'])
+            service.roles[role_name].set_state(Role::STATE['COOLDOWN'])
+
+            service.roles[role_name].nodes.delete_if do |node|
+                !nodes[:failure].include?(node['deploy_id']) &&
+                    nodes[:successful].include?(node['deploy_id'])
+            end
+
+            @event_manager.trigger_action(:wait_cooldown,
+                                          service.id,
+                                          service.id,
+                                          role_name,
+                                          10) # TODO, config time
+
+            service.roles[role_name].clean_scale_way
+
+            service.update
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def scaleup_failure_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
             service.set_state(Service::STATE['FAILED_SCALING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_SCALING'])
+
+            service.roles[role_name].scale_way('UP')
+
+            service.update
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def scaledown_failure_cb(service_id, role_name, nodes)
+        rc = @srv_pool.get(service_id) do |service|
+            role = service.roles[role_name]
+
+            service.set_state(Service::STATE['FAILED_SCALING'])
+            role.set_state(Role::STATE['FAILED_SCALING'])
+
+            role.nodes.delete_if do |node|
+                !nodes[:failure].include?(node['deploy_id']) &&
+                    nodes[:successful].include?(node['deploy_id'])
+            end
+
+            role.scale_way('DOWN')
 
             service.update
         end
@@ -340,10 +415,11 @@ class ServiceLCM
         end
 
         roles.each do |_name, role|
-            rc = role.deploy scale
+            rc = role.deploy
 
             if !rc[0]
                 role.set_state(Role::STATE[error_state])
+                Log.error LOG_COMP, rc[1]
                 return false
             end
 
@@ -369,7 +445,7 @@ class ServiceLCM
         end
 
         roles.each do |_name, role|
-            rc = role.shutdown scale
+            rc = role.shutdown
 
             if !rc[0]
                 role.set_state(Role::STATE[error_state])
@@ -396,6 +472,60 @@ class ServiceLCM
         return rc if OpenNebula.is_error?(rc)
 
         nil
+    end
+
+    def recover_deploy(service)
+        service.roles.each do |name, role|
+            next if role.state != Role::STATE['FAILED_DEPLOYING']
+
+            nodes = role.recover_deploy
+
+            next if nodes.empty?
+
+            @event_manager.trigger_action(:wait_deploy,
+                                          service.id,
+                                          service.id,
+                                          name,
+                                          nodes)
+        end
+    end
+
+    def recover_undeploy(service)
+        service.roles.each do |name, role|
+            next if role.state != Role::STATE['FAILED_UNDEPLOYING']
+
+            nodes = role.recover_undeploy
+
+            next if nodes.empty?
+
+            @event_manager.trigger_action(:wait_undeploy,
+                                          service.id,
+                                          service.id,
+                                          name,
+                                          nodes)
+        end
+    end
+
+    def recover_scale(service)
+        service.roles.each do |name, role|
+            next if role.state != Role::STATE['FAILED_SCALING']
+
+            nodes, up = role.recover_scale
+
+            next if nodes.empty?
+
+            if up
+                action = :wait_scaleup
+            else
+                action = :wait_scaledown
+            end
+
+            @event_manager.trigger_action(action,
+                                          service.id,
+                                          service.id,
+                                          name,
+                                          nodes)
+        end
     end
 
 end

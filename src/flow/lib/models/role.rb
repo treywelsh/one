@@ -80,6 +80,11 @@ module OpenNebula
             FAILED_DELETING
         ]
 
+        SCALE_WAYS = {
+            'UP' => 0,
+            'DOWN' => 1
+        }
+
         LOG_COMP = 'ROL'
 
         def initialize(body, service)
@@ -203,6 +208,14 @@ module OpenNebula
             true
         end
 
+        def scale_way(way)
+            @body['scale_way'] = SCALE_WAYS[way]
+        end
+
+        def clean_scale_way
+            @body.delete('scale_way')
+        end
+
         # Retrieves the VM information for each Node in this Role. If a Node
         # is to be disposed and it is found in DONE, it will be cleaned
         #
@@ -274,13 +287,11 @@ module OpenNebula
         # @return [Array<true, nil>, Array<false, String>] true if all the VMs
         # were created, false and the error reason if there was a problem
         # creating the VMs
-        def deploy(scale_up = false)
+        def deploy
             deployed_nodes = []
             n_nodes = cardinality - nodes.size
 
-            File.open("/tmp/loga", "a") do |file|
-                file.write("n_nodes: #{n_nodes} (#{cardinality} #{nodes.size})\n")
-            end
+            return [deployed_nodes, nil] if n_nodes == 0
 
             @body['last_vmname'] ||= 0
 
@@ -293,66 +304,75 @@ module OpenNebula
                 # If the extra_template contains APPEND="<attr1>,<attr2>", it
                 # will add the attributes that already exist in the template,
                 # instead of replacing them.
-                append = extra_template.match(/^\s*APPEND=\"?(.*?)\"?\s*$/)[1].split(",") rescue nil
+                append = extra_template
+                         .match(/^\s*APPEND=\"?(.*?)\"?\s*$/)[1]
+                         .split(',') rescue nil
 
                 if append && !append.empty?
                     rc = template.info
                     if OpenNebula.is_error?(rc)
-                        msg = "Role #{name} : Info template #{template_id}; #{rc.message}"
+                        msg = "Role #{name} : Info template #{template_id};"\
+                               " #{rc.message}"
 
                         Log.error LOG_COMP, msg, @service.id()
                         @service.log_error(msg)
 
-                        return [false, "Error fetching Info to instantiate the VM Template" \
-                            " #{template_id} in Role #{self.name}: #{rc.message}"]
+                        return [false, 'Error fetching Info to instantiate the'\
+                                       " VM Template #{template_id} in Role "\
+                                       "#{name}: #{rc.message}"]
                     end
 
-                    et = template.template_like_str("TEMPLATE",
-                                        true, append.join("|"))
+                    et = template.template_like_str('TEMPLATE',
+                                                    true,
+                                                    append.join('|'))
 
                     et = et << "\n" << extra_template
 
                     extra_template = et
                 end
             else
-                extra_template = ""
+                extra_template = ''
             end
 
             extra_template <<
-                "\nSERVICE_ID = #{@service.id()}" <<
+                "\nSERVICE_ID = #{@service.id}" \
                 "\nROLE_NAME = \"#{@body['name']}\""
 
-            n_nodes.times { |i|
-                vm_name = @@vm_name_template.
-                    gsub("$SERVICE_ID",    @service.id().to_s).
-                    gsub("$SERVICE_NAME",  @service.name().to_s).
-                    gsub("$ROLE_NAME",     name().to_s).
-                    gsub("$VM_NUMBER",     @body['last_vmname'].to_s)
+            n_nodes.times do
+                vm_name = @@vm_name_template
+                          .gsub('$SERVICE_ID', @service.id.to_s)
+                          .gsub('$SERVICE_NAME', @service.name.to_s)
+                          .gsub('$ROLE_NAME', name.to_s)
+                          .gsub('$VM_NUMBER', @body['last_vmname'].to_s)
 
                 @body['last_vmname'] += 1
 
-                Log.debug LOG_COMP, "Role #{name} : Trying to instantiate template "\
-                    "#{template_id}, with name #{vm_name}", @service.id()
+                Log.debug LOG_COMP, "Role #{name} : Trying to instantiate "\
+                    "template #{template_id}, with name #{vm_name}", @service.id
 
                 vm_id = template.instantiate(vm_name, false, extra_template)
 
                 deployed_nodes << vm_id
 
                 if OpenNebula.is_error?(vm_id)
-                    msg = "Role #{name} : Instantiate failed for template #{template_id}; #{vm_id.message}"
-                    Log.error LOG_COMP, msg, @service.id()
+                    msg = "Role #{name} : Instantiate failed for template "\
+                          "#{template_id}; #{vm_id.message}"
+                    Log.error LOG_COMP, msg, @service.id
                     @service.log_error(msg)
 
-                    return [false, "Error trying to instantiate the VM Template" \
-                        " #{template_id} in Role #{self.name}: #{vm_id.message}"]
+                    return [false, 'Error trying to instantiate the VM ' \
+                                   "Template #{template_id} in Role " \
+                                   "#{name}: #{vm_id.message}"]
                 end
 
-                Log.debug LOG_COMP, "Role #{name} : Instantiate success, VM ID #{vm_id}", @service.id()
+                Log.debug LOG_COMP, "Role #{name} : Instantiate success,"\
+                                    " VM ID #{vm_id}", @service.id
                 node = {
-                    'deploy_id' => vm_id,
+                    'deploy_id' => vm_id
                 }
 
-                vm = OpenNebula::VirtualMachine.new_with_id(vm_id, @service.client)
+                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
+                                                            @service.client)
                 rc = vm.info
                 if OpenNebula.is_error?(rc)
                     node['vm_info'] = nil
@@ -360,12 +380,8 @@ module OpenNebula
                     node['vm_info'] = vm.to_hash
                 end
 
-                if scale_up
-                    node['scale_up'] = '1'
-                end
-
                 @body['nodes'] << node
-            }
+            end
 
             [deployed_nodes, nil]
         end
@@ -377,14 +393,14 @@ module OpenNebula
         # @return [Array<true, nil>, Array<false, String>] true if all the VMs
         # were terminated, false and the error reason if there was a problem
         # shutting down the VMs
-        def shutdown(scale_down = false)
-            if scale_down
+        def shutdown
+            if nodes.size != cardinality
                 n_nodes = nodes.size - cardinality
             else
                 n_nodes = nodes.size
             end
 
-            rc = shutdown_nodes(nodes, n_nodes, scale_down)
+            rc = shutdown_nodes(nodes, n_nodes)
 
             return [false, "Error undeploying nodes for role #{id}"] unless rc[0]
 
@@ -702,8 +718,114 @@ module OpenNebula
         # Recover
         ########################################################################
 
-        def recover_deployment()
-            recover()
+        def recover_deploy
+            nodes = @body['nodes']
+            deployed_nodes = []
+
+            nodes.each do |node|
+                vm_id = node['deploy_id']
+
+                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
+                                                            @service.client)
+
+                rc = vm.info
+
+                if OpenNebula.is_error?(rc)
+                    msg = "Role #{name} : Retry failed for VM "\
+                          "#{vm_id}; #{rc.message}"
+                    Log.error LOG_COMP, msg, @service.id
+
+                    next true
+                end
+
+                vm_state = vm.state
+                lcm_state = vm.lcm_state
+
+                next false if vm_state == 3 && lcm_state == 3 # ACTIVE/RUNNING
+
+                next true if vm_state == '6' # Delete DONE nodes
+
+                if Role.vm_failure?(vm_state, lcm_state)
+                    rc = vm.recover(2)
+
+                    if OpenNebula.is_error?(rc)
+                        msg = "Role #{name} : Retry failed for VM "\
+                              "#{vm_id}; #{rc.message}"
+
+                        Log.error LOG_COMP, msg, @service.id
+                        @service.log_error(msg)
+                    else
+                        deployed_nodes << vm_id
+                    end
+                elsif vm_state == '3' && lcm_state == '16' # UNKNOWN
+                    vm.resume
+
+                    deployed_nodes << vm_id
+                end
+            end
+
+            rc = deploy
+
+            deployed_nodes.concat(rc[0]) if rc[1].nil?
+
+            deployed_nodes
+        end
+
+        def recover_undeploy
+            nodes = @body['nodes']
+            undeployed_nodes = []
+
+            nodes.delete_if do |node|
+                vm_id = node['deploy_id']
+
+                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
+                                                            @service.client)
+
+                rc = vm.info
+
+                if OpenNebula.is_error?(rc)
+                    msg = "Role #{name} : Retry failed for VM "\
+                          "#{vm_id}; #{rc.message}"
+                    Log.error LOG_COMP, msg, @service.id
+
+                    next true
+                end
+
+                vm_state = vm.state
+                lcm_state = vm.lcm_state
+
+                next true if vm_state == 6 && lcm_state == 0 # DONE/LCM_INIT
+
+                if Role.vm_failure?(vm_state, lcm_state)
+                    rc = vm.recover(2)
+
+                    if OpenNebula.is_error?(rc)
+                        msg = "Role #{name} : Retry failed for VM "\
+                              "#{vm_id}; #{rc.message}"
+
+                        Log.error LOG_COMP, msg, @service.id
+                        @service.log_error(msg)
+                    else
+                        undeployed_nodes << vm_id
+                    end
+                else
+                    action = @body['shutdown_action']
+
+                    if action == 'terminate-hard'
+                        vm.terminate(true)
+                    else
+                        vm.terminate
+                    end
+
+                    undeployed_nodes << vm_id
+                end
+            end
+
+            rc = shutdown
+
+            undeployed_nodes.concat(rc[0]) if rc[1].nil?
+
+            undeployed_nodes
         end
 
         def recover_warning()
@@ -711,9 +833,16 @@ module OpenNebula
             deploy()
         end
 
-        def recover_scale()
-            recover()
-            retry_scale()
+        def recover_scale
+            rc = nil
+
+            if @body['scale_way'] == SCALE_WAYS['UP']
+                rc = [recover_deploy, true]
+            elsif @body['scale_way'] == SCALE_WAYS['DOWN']
+                rc = [recover_undeploy, false]
+            end
+
+            rc
         end
 
         ########################################################################
@@ -1074,7 +1203,7 @@ module OpenNebula
 
         # Shuts down all the given nodes
         # @param scale_down [true,false] True to set the 'disposed' node flag
-        def shutdown_nodes(nodes, n_nodes, scale_down)
+        def shutdown_nodes(nodes, n_nodes)
             success = true
             undeployed_nodes = []
 
@@ -1088,7 +1217,9 @@ module OpenNebula
                 action = @@default_shutdown
             end
 
-            nodes.slice!(0..n_nodes-1).delete_if do |node|
+            nodes[0..n_nodes-1].each do |node|
+                rc = nil
+
                 vm_id = node['deploy_id']
 
                 Log.debug(LOG_COMP,
@@ -1101,10 +1232,6 @@ module OpenNebula
                     rc = vm.terminate(true)
                 else
                     rc = vm.terminate
-                end
-
-                if scale_down
-                    node['disposed'] = '1'
                 end
 
                 if OpenNebula.is_error?(rc)
@@ -1137,8 +1264,6 @@ module OpenNebula
                               @service.id)
                     undeployed_nodes << vm_id
                 end
-
-                !OpenNebula.is_error?(rc)
             end
 
             [success, undeployed_nodes]

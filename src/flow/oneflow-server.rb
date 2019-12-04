@@ -214,7 +214,9 @@ post '/service/:id/action' do
         rc = case action['perform']
         when 'shutdown'
             service.shutdown
-        when 'recover', 'deploy'
+        when 'recover'
+            lcm.am.trigger_action(:recover, service.id, service.id)
+        when 'deploy'
             service.recover
         when 'chown'
             if opts && opts['owner_id']

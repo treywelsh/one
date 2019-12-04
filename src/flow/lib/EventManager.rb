@@ -92,8 +92,17 @@ class EventManager
         rc = wait(nodes, 'ACTIVE', 'RUNNING')
 
         # Todo, check if OneGate confirmation is needed (trigger another action)
-        @lcm.trigger_action(:deploy_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:deploy_failure_cb, service_id, service_id, role_name) unless rc
+        if rc[0]
+            @lcm.trigger_action(:deploy_cb,
+                                service_id,
+                                service_id,
+                                role_name)
+        else
+            @lcm.trigger_action(:deploy_failure_cb,
+                                service_id,
+                                service_id,
+                                role_name)
+        end
     end
 
     # Wait for nodes to be in DONE
@@ -104,8 +113,19 @@ class EventManager
         Log.info LOG_COMP, "Waiting #{nodes} to be (DONE, LCM_INIT)"
         rc = wait(nodes, 'DONE', 'LCM_INIT')
 
-        @lcm.trigger_action(:undeploy_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:undeploy_failure_cb, service_id, service_id, role_name) unless rc
+        if rc[0]
+            @lcm.trigger_action(:undeploy_cb,
+                                service_id,
+                                service_id,
+                                role_name,
+                                rc[1])
+        else
+            @lcm.trigger_action(:undeploy_failure_cb,
+                                service_id,
+                                service_id,
+                                role_name,
+                                rc[1])
+        end
     end
 
     # Wait for nodes to be in RUNNING if OneGate check required it will trigger
@@ -120,8 +140,17 @@ class EventManager
         rc = wait(nodes, 'ACTIVE', 'RUNNING')
 
         # Todo, check if OneGate confirmation is needed (trigger another action)
-        @lcm.trigger_action(:scale_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:scale_failure_cb, service_id, service_id, role_name) unless rc
+        if rc[0]
+            @lcm.trigger_action(:scaleup_cb,
+                                service_id,
+                                service_id,
+                                role_name)
+        else
+            @lcm.trigger_action(:scaleup_failure_cb,
+                                service_id,
+                                service_id,
+                                role_name)
+        end
     end
 
     def wait_scaledown_action(service_id, role_name, nodes)
@@ -130,8 +159,19 @@ class EventManager
         rc = wait(nodes, 'DONE', 'LCM_INIT')
 
         # Todo, check if OneGate confirmation is needed (trigger another action)
-        @lcm.trigger_action(:scale_cb, service_id, service_id, role_name) if rc
-        @lcm.trigger_action(:scale_failure_cb, service_id, service_id, role_name) unless rc
+        if rc[0]
+            @lcm.trigger_action(:scaledown_cb,
+                                service_id,
+                                service_id,
+                                role_name,
+                                rc[1])
+        else
+            @lcm.trigger_action(:scaledown_failure_cb,
+                                service_id,
+                                service_id,
+                                role_name,
+                                rc[1])
+        end
     end
 
     # Wait for nodes to be in DONE
@@ -160,8 +200,9 @@ class EventManager
     def wait(nodes, state, lcm_state)
         subscriber = gen_subscriber
 
+        rc_nodes = { :successful => [], :failure => [] }
+
         nodes.each do |node|
-            # TODO, use enums for states
             subscribe(node, state, lcm_state, subscriber)
         end
 
@@ -178,14 +219,17 @@ class EventManager
                 Log.info LOG_COMP, "Timeout reached for VM #{nodes} =>"\
                                    " (#{state}, #{lcm_state})"
 
-                fail_nodes = check_nodes(nodes, state, lcm_state, subscriber)
+                rc = check_nodes(nodes, state, lcm_state, subscriber)
 
-                next if !nodes.empty? && fail_nodes.empty?
+                rc_nodes[:successful].concat(rc[:successful])
+                rc_nodes[:failure].concat(rc[:failure])
 
-                # If any node is in error wait actione will fails
-                return false unless fail_nodes.empty?
+                next if !nodes.empty? && rc_nodes[:failure].empty?
 
-                return true # (nodes.empty? && fail_nodes.empty?)
+                # If any node is in error wait action will fails
+                return [false, rc_nodes] unless rc_nodes[:failure].empty?
+
+                return [true, rc_nodes] # (nodes.empty? && fail_nodes.empty?)
             end
 
             id = retrieve_id(key)
@@ -193,13 +237,14 @@ class EventManager
 
             nodes.delete(id)
             unsubscribe(id, state, lcm_state, subscriber)
+            rc_nodes[:successful] << id
         end
 
-        true
+        [true, rc_nodes]
     end
 
     def check_nodes(nodes, state, lcm_state, subscriber)
-        failure_nodes = []
+        rc_nodes = { :successful => [], :failure => [] }
 
         nodes.delete_if do |node|
             vm = OpenNebula::VirtualMachine
@@ -214,12 +259,14 @@ class EventManager
                (vm_state == state && vm_lcm_state == lcm_state)
                 unsubscribe(node, state, lcm_state, subscriber)
 
+                rc_nodes[:successful] << node
                 next true
             end
 
             if FAILURE_STATES.include? vm_lcm_state
                 Log.error LOG_COMP, "Node #{node} is in FAILURE state"
-                failure_nodes.append(node)
+
+                rc_nodes[:failure] << node
 
                 next true
             end
@@ -227,7 +274,7 @@ class EventManager
             false
         end
 
-        failure_nodes
+        rc_nodes
     end
 
     ############################################################################
