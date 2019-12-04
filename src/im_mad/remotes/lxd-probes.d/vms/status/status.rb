@@ -16,120 +16,81 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
+# TODO: Make container interface a system wide lib
 $LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../../../../vmm/lxd/"
 
 require 'container'
 require 'client'
 require 'base64'
 require_relative '../../../lib/poll_common'
-require 'sequel'
+require_relative '../../../lib/probe_db'
 
 module LXD
 
     CLIENT = LXDClient.new
 
-    class << self
-
-        # Get and translate LXD state to Opennebula monitor state
-        #  @param state [String] libvirt state
-        #  @return [String] OpenNebula state
-        #
-        # LXD states for the guest are
-        #  * 'running' state refers to containers which are currently active.
-        #  * 'frozen' after lxc freeze (suspended).
-        #  * 'stopped' container not running or in the process of shutting down.
-        #  * 'failure' container have failed.
-        def one_status(container)
-            begin
-                status = container.status.downcase
-            rescue StandardError
-                status = 'unknown'
-            end
-
-            case status
-            when 'running'
-                state = 'a'
-            when 'frozen'
-                state = 'p'
-            when 'stopped'
-                state = 'd'
-
-                state = '-' if container.config['user.one_status'] == '0'
-            when 'failure'
-                state = 'e'
-            else
-                state = '-'
-            end
-
-            state
+    # Get and translate LXD state to Opennebula monitor state
+    #  @param state [String] libvirt state
+    #  @return [String] OpenNebula state
+    #
+    # LXD states for the guest are
+    #  * 'running' state refers to containers which are currently active.
+    #  * 'frozen' after lxc freeze (suspended).
+    #  * 'stopped' container not running or in the process of shutting down.
+    #  * 'failure' container have failed.
+    def self.one_status(container)
+        begin
+            status = container.status.downcase
+        rescue StandardError
+            status = 'unknown'
         end
 
-        def get_all_vm_status
-            vms = Container.get_all(CLIENT)
+        case status
+        when 'running'
+            state = 'a'
+        when 'frozen'
+            state = 'p'
+        when 'stopped'
+            state = 'd'
 
-            return unless vms
-
-            vms_info = {}
-            vms.each do |container|
-                vms_info[container.name] = { :status => one_status(container) }
-            end
-
-            vms_info
+            state = '-' if container.config['user.one_status'] == '0'
+        when 'failure'
+            state = 'e'
+        else
+            state = '-'
         end
 
-  end
-
-end
-
-def connect(db_path)
-    Sequel.connect("sqlite://#{db_path}")
-end
-
-def setup_db(db)
-    db.create_table :states do
-        primary_key :id
-        # String :timestamp # TODO: Add status update-based timestamp
-        String :did
-        String :status
+        state
     end
-end
 
-DB_PATH = 'status.db'
+    def self.all_vm_status
+        vms = Container.get_all(CLIENT)
+
+        return unless vms
+
+        vms_info = {}
+        vms.each do |container|
+            vms_info[container.name] = { :status => one_status(container) }
+        end
+
+        vms_info
+    end
+
+end
 
 ################################################################################
 # MAIN PROGRAM
 ################################################################################
+vms = all_vm_status(LXD)
 
-data = all_vm_status(LXD)
-vms = data.split('VM=')
-new_data = ''
+return if vms.empty?
 
-db = connect(DB_PATH)
+time = Time.now.to_i
+vms = vms.split("VM=[\n")[1..-1]
 
-begin
-    setup_db(db)
-rescue
-end
+db = DB.new(time, 'LXD')
 
-dataset = db[:states]
-
-vms.each do |vm|
-    id = vm[/ID=\d+/]
-    did = vm[/DEPLOY_ID=[-0-9a-zA-Z_]+/] # TODO: May change ?
-    status = vm[/STATUS=\S?/]
-
-    begin
-        vminfo = dataset.match(id)
-
-        if vminfo[:state] != status
-            dataset.update(vminfo[:state] => data)
-            new_data << vm
-        end
-    rescue
-        dataset.insert(:id => id, :did => did, :status => status)
-        new_data << vm
-    end
-end
+new_data = db.new_status(vms)
 
 return if new_data.empty?
 

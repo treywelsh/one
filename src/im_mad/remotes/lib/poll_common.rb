@@ -43,13 +43,13 @@ end
 # @param name [String] of the monitor metric
 # @param value [String] of the monitor metric
 # @return [String, nil]
-def print_data(name, value)
+def monitor_data(name, value)
     return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
 
     if value.instance_of? Array
         data_str = ''
         value.each do |v|
-            data_str += print_data(name, v)
+            data_str += monitor_data(name, v)
         end
 
         return data_str
@@ -68,79 +68,87 @@ end
 # attributes of the VM
 # @param hypervisor [Module]
 # @param vm_id [String] with the VM ID
-def print_one_vm_info(hypervisor, vm_id)
+def one_vm_info(hypervisor, vm_id)
     info = hypervisor.get_vm_info(vm_id)
 
     exit(-1) unless info
 
     values = info.map do |key, value|
-        print_data(key, value)
+        monitor_data(key, value)
     end
 
-    puts values.zip.join(' ')
+    values.zip.join(' ')
 end
 
-def print_all_vm_info(hypervisor)
+def all_vm_info(hypervisor)
     require 'yaml'
     require 'zlib'
 
-    vms = hypervisor.get_all_vm_info
+    vms = hypervisor.all_vm_info
 
     return if vms.nil?
 
     compressed = Zlib::Deflate.deflate(vms.to_yaml)
 
-    puts Base64.encode64(compressed).delete("\n")
+    Base64.encode64(compressed).delete("\n")
 end
 
 def all_vm_template(hypervisor)
-    vms = hypervisor.get_all_vm_template
+    vms = hypervisor.all_vm_info
 
     return if vms.nil?
 
-    template, monitor_data = vm_info(vms)
+    string = ''
 
-    puts 'VM_POLL=YES'
+    vms.each do |name, data|
+        template, usage = vm_info(name, data)
 
-    template << "  POLL=\"#{monitor_data}\" ]"
+        string << template
+        string << "  POLL=\"#{usage}\" ]\n"
+    end
 
-    puts template
+    string
 end
 
 def all_vm_status(hypervisor)
-    vms = hypervisor.get_all_vm_status
+    vms = hypervisor.all_vm_status
 
     return if vms.nil?
 
-    template, monitor_data = vm_info(vms)
+    string = ''
 
-    template << "  #{monitor_data} ]"
+    vms.each do |name, data|
+        template, usage = vm_info(name, data)
 
-    template
+        string << template
+        string << "  #{usage} ]\n"
+    end
+
+    string
 end
 
-def vm_info(vms)
-    vms.each do |name, data|
+def vm_info(name, data)
+    if name =~ /^one-\d*$/
+        number = name.split('-').last
+    else
         number = -1
-
-        if name =~ /^one-\d*$/
-            number = name.split('-').last
-        end
-
-        string =  "VM=[\n"
-        string << "  ID=#{number},\n"
-        string << "  DEPLOY_ID=#{name},\n"
-        string << %(  VM_NAME="#{data[:vm_name]}",\n) if data[:vm_name]
-
-        if data[:template]
-            string << %(  IMPORT_TEMPLATE="#{data[:template]}",\n)
-            data.delete(:template)
-        end
-
-        values = data.map do |key, value|
-            print_data(key, value)
-        end
-
-        return string, values.zip.join(' ')
     end
+
+    template =   "VM=[\n"
+    template <<  "  ID=#{number},\n"
+    template <<  "  DEPLOY_ID=#{name},\n"
+    template << %(  VM_NAME="#{data[:vm_name]}",\n) if data[:vm_name]
+
+    if data[:template]
+        template << %(  IMPORT_TEMPLATE="#{data[:template]}",\n)
+        data.delete(:template)
+    end
+
+    usage = data.map do |key, value|
+        monitor_data(key, value)
+    end
+
+    usage = usage.zip.join(' ')
+
+    [template, usage]
 end

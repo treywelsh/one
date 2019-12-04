@@ -48,7 +48,7 @@ module LXD
         # Gets the information of all VMs
         #
         # @return [Hash, nil] Hash with the VM information or nil in case of error
-        def get_all_vm_info
+        def all_vm_info
             vms = Container.get_all(CLIENT)
 
             return unless vms
@@ -72,7 +72,7 @@ module LXD
                 end
 
                 vms_info[name] = values
-                next unless get_state(container) == 'a'
+                next unless container.status.casecmp('running').zero?
 
                 vmd = container.monitor['metadata']
 
@@ -95,7 +95,7 @@ module LXD
 
         def lxc_path(vm_name)
             path = 'lxc/' + vm_name
-            path = "#{ENV['LXC_CGROUP_PREFIX']}#{path}" if ENV['LXC_CGROUP_PREFIX']
+            "#{ENV['LXC_CGROUP_PREFIX']}#{path}" if ENV['LXC_CGROUP_PREFIX']
         end
 
         def get_memory(vm_name)
@@ -229,4 +229,4 @@ end
 # MAIN PROGRAM
 ################################################################################
 
-print_all_vm_template(LXD)
+puts "VM_POLL=YES\n#{all_vm_template(LXD)}"
