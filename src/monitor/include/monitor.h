@@ -60,12 +60,8 @@ protected:
     void process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
-    /**
-     *  Stop the driver, stop all running threads
-     **/
-    void stop();
-
     std::unique_ptr<std::thread> monitor_thread;
+    std::atomic<bool>            terminate{false};
 
     // ---------------------------------------------------------------
     // Pools

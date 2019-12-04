@@ -221,7 +221,7 @@ void Monitor::start()
     start_driver(); // blocking call
 
     //signal monitor_thread
-
+    terminate = true;
     monitor_thread->join();
 
     dm->stop();
@@ -248,7 +248,7 @@ void Monitor::thread_execute()
 
     // Replace this loop with some timer action,
     // which should do the monitoring logic
-    while (true)
+    while (!terminate)
     {
         const auto& hosts = hpool->get_objects();
         NebulaLog::log("MON", Log::INFO, "Number of hosts = " + std::to_string(hosts.size()));
