@@ -94,6 +94,16 @@ public:
         return _type_str._to_str(_type);
     }
 
+    int oid() const
+    {
+        return _oid;
+    }
+
+    void oid(int oid)
+    {
+        _oid = oid;
+    }
+
     const std::string& payload() const
     {
         return _payload;
@@ -109,6 +119,8 @@ private:
      *  Message fields
      */
     E _type;
+
+    int _oid = -1;
 
     std::string _payload;
 
@@ -142,6 +154,8 @@ int Message<E>::parse_from(const std::string& input, bool decrypt)
     }
 
     buffer.clear();
+
+    is >> _oid;
 
     is >> buffer;
 
@@ -209,6 +223,8 @@ int Message<E>::write_to(std::string& out, bool encrypt) const
     }
 
     out = _type_str._to_str(_type);
+    out += ' ';
+    out += std::to_string(_oid);
     out += ' ';
     out += payloaz64;
     out += '\n';

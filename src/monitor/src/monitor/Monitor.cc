@@ -285,11 +285,11 @@ bool Monitor::pull_from_oned()
     {
         sleep(2);
         oned_connected = hpool->update();
-        if (oned_connected != 0 && retries > 0)
+        if (oned_connected != 0 && retries-- > 0)
         {
             NebulaLog::warn("MON", "Unable to connect to oned, trying again");
         }
-    } while (oned_connected != 0 || retries-- > 0);
+    } while (oned_connected != 0 && retries > 0);
 
     for (auto& host : hpool->get_objects())
     {
@@ -304,9 +304,7 @@ bool Monitor::pull_from_oned()
 
 void Monitor::process_update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
-    HostBase host(msg->payload()); // for the first step we need only oid, not whole msg
-
-    auto h = hpool->get(host.oid());
+    auto h = hpool->get(msg->oid());
     if (h)
     {
         h->from_xml(msg->payload());
@@ -324,9 +322,7 @@ void Monitor::process_update_host(std::unique_ptr<Message<OpenNebulaMessages>> m
 
 void Monitor::process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg)
 {
-    HostBase host(msg->payload());
-
-    hpool->erase(host.oid());
+    hpool->erase(msg->oid());
 }
 
 /* -------------------------------------------------------------------------- */
@@ -350,7 +346,7 @@ void Monitor::process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>>
 
 void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg)
 {
-    NebulaLog::log("MON", Log::INFO, "process_monitor_host: " + msg->payload());
+    NebulaLog::log("MON", Log::INFO, "process_monitor_host: " + to_string(msg->oid()));
 
     try
     {
@@ -366,7 +362,7 @@ void Monitor::process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages
             return;
         }
 
-        int oid;
+        int oid = msg->oid();
         if (!tmpl.get("OID", oid))
         {
             NebulaLog::error("MON", "Monitor information does not contain host id");

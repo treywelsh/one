@@ -121,7 +121,7 @@ public:
     /**
      *  Send host delete message to monitor
      */
-    void delete_host(Host *host);
+    void delete_host(int hid);
 
 private:
     /**

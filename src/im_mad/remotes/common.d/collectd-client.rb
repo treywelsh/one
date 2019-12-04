@@ -79,7 +79,7 @@ class CollectdClient
     end
 
     def send(data)
-        @s.send("MONITOR_HOST #{data}\n", 0, @host, @port)
+        @s.send("MONITOR_HOST #{@number} #{data}\n", 0, @host, @port)
     end
 
     def monitor

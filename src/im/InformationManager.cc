@@ -170,6 +170,7 @@ void InformationManager::update_host(Host *host)
     string tmp;
     Message<OpenNebulaMessages> msg;
     msg.type(OpenNebulaMessages::UPDATE_HOST);
+    msg.oid(host->get_oid());
     msg.payload(host->to_xml(tmp));
     imd->write(msg);
 }
@@ -177,7 +178,7 @@ void InformationManager::update_host(Host *host)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void InformationManager::delete_host(Host *host)
+void InformationManager::delete_host(int hid)
 {
     auto imd = get("monitor");
 
@@ -186,10 +187,9 @@ void InformationManager::delete_host(Host *host)
         return;
     }
 
-    string tmp;
     Message<OpenNebulaMessages> msg;
     msg.type(OpenNebulaMessages::DEL_HOST);
-    msg.payload(host->to_xml(tmp));
+    msg.oid(hid);
     imd->write(msg);
 }
 
