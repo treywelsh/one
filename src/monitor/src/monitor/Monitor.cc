@@ -14,7 +14,7 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "monitor.h"
+#include "Monitor.h"
 #include "MonitorConfigTemplate.h"
 #include "NebulaLog.h"
 #include "Client.h"
