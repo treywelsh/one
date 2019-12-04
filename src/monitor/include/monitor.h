@@ -22,7 +22,7 @@
 #include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
-#include "DriverManager.h"
+#include "MonitorDriverManager.h"
 #include "MonitorDriver.h"
 #include "OpenNebulaDriver.h"
 #include "OpenNebulaStream.h"
@@ -71,7 +71,7 @@ private:
 
     std::unique_ptr<SqlDB> sqlDB;
 
-    std::unique_ptr<DriverManager> dm;
+    std::unique_ptr<MonitorDriverManager> dm;
 
     /**
      *  Stream receiving UDP data from monitor agents.

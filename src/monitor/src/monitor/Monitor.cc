@@ -148,7 +148,7 @@ void Monitor::start()
 
     config->get("IM_MAD", drivers_conf);
 
-    dm.reset(new DriverManager());
+    dm.reset(new MonitorDriverManager());
 
     if (dm->load_drivers(drivers_conf) != 0)
     {

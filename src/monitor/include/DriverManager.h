@@ -17,26 +17,29 @@
 #ifndef DRIVER_MANAGER_H_
 #define DRIVER_MANAGER_H_
 
-#include "MonitorDriver.h"
+#include "Driver.h"
 #include "Attribute.h"
-#include "HostBase.h"
+#include "NebulaService.h"
 #include <string>
 
+template<typename E>
 class DriverManager
 {
 public:
     DriverManager() {}
 
+    virtual ~DriverManager() = default;
+
     int load_drivers(std::vector<const VectorAttribute*> &conf);
 
-    driver_t* get_driver(const std::string& name);
+    Driver<E>* get_driver(const std::string& name) const;
 
     /**
      *  Register an action for a given message type. The action is registered
      *  for all installed drivers. Must be called after load_drivers method.
      */
-    void register_action(MonitorDriverMessages t,
-        std::function<void(std::unique_ptr<Message<MonitorDriverMessages>>)> a);
+    void register_action(E t,
+        std::function<void(std::unique_ptr<Message<E>>)> a);
 
     /**
      *  Start all drivers
@@ -48,12 +51,120 @@ public:
      */
     void stop();
 
-    int start_monitor(HostBase* host, bool update_remotes);
-
-    int stop_monitor(HostBase* host);
-
 private:
-    std::map<std::string, driver_t*> drivers;
+    std::map<std::string, std::unique_ptr<Driver<E>>> drivers;
 };
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+int DriverManager<E>::load_drivers(vector<const VectorAttribute*> &conf)
+{
+    NebulaLog::info("DrM", "Loading drivers.");
+
+    for (const auto& vattr : conf)
+    {
+        auto name = vattr->vector_value("NAME");
+        auto exec = vattr->vector_value("EXECUTABLE");
+        auto args = vattr->vector_value("ARGUMENTS");
+        int  threads;
+
+        vattr->vector_value("THREADS", threads, 0);
+
+        NebulaLog::info("InM", "Loading driver: " + name);
+
+        if (exec.empty())
+        {
+            NebulaLog::error("InM", "\tEmpty executable for driver: " + name);
+            return -1;
+        }
+
+        if (exec[0] != '/') //Look in ONE_LOCATION/lib/mads or in "/usr/lib/one/mads"
+        {
+            exec = NebulaService::instance().get_mad_location() + exec;
+        }
+
+        if (access(exec.c_str(), F_OK) != 0)
+        {
+            NebulaLog::error("InM", "File not exists: " + exec);
+            return -1;
+        }
+
+        auto rc = drivers.insert({name, std::unique_ptr<Driver<E>>(new Driver<E>(exec, args, threads))});
+
+        if (rc.second)
+        {
+            NebulaLog::info("InM", "\tDriver loaded: " + name);
+        }
+        else
+        {
+            NebulaLog::error("InM", "\tDriver already exists: " + name);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+Driver<E>* DriverManager<E>::get_driver(const std::string& name) const
+{
+    auto driver = drivers.find(name);
+
+    if (driver == drivers.end())
+    {
+        return nullptr;
+    }
+
+    return driver->second.get();
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+void DriverManager<E>::register_action(E t,
+    std::function<void(std::unique_ptr<Message<E>>)> a)
+{
+    for (auto& driver : drivers)
+    {
+        driver.second->register_action(t, a);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+int DriverManager<E>::start()
+{
+    std::string error;
+    for (auto& driver : drivers)
+    {
+        auto rc = driver.second->start(error);
+        if (rc != 0)
+        {
+            NebulaLog::error("DrM", "Unable to start driver: " + error);
+            return rc;
+        }
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+template<typename E>
+void DriverManager<E>::stop()
+{
+    for (auto& driver : drivers)
+    {
+        driver.second->stop();
+    }
+}
 
 #endif // DRIVER_MANAGER_H_
