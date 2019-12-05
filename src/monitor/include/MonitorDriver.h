@@ -54,16 +54,18 @@ protected:
     bool pull_from_oned();
 
     // Oned message handlers
+    static void _undefined(std::unique_ptr<Message<OpenNebulaMessages>> msg);
     void _update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
     void _del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    void _start_monitor(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+    void _stop_monitor(std::unique_ptr<Message<OpenNebulaMessages>> msg);
 
     // Monitor driver message handlers
-    void _monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    static void _monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void _monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void _monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void _system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
     void _state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void _undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
     std::unique_ptr<std::thread> monitor_thread;

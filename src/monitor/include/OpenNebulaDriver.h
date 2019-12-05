@@ -96,6 +96,11 @@ protected:
     {
         write(1, buf.c_str(), buf.size());
     }
+
+    static void write2one(const Message<OpenNebulaMessages>& msg)
+    {
+        msg.write_to(1, false);
+    }
 };
 
 #endif // _OPENNEBULA_DRIVER_H

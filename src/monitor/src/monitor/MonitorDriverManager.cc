@@ -23,7 +23,7 @@ using namespace std;
 
 int MonitorDriverManager::start_monitor(HostBase* host, bool update_remotes)
 {
-    NebulaLog::debug("DrM", "Monitoring host id: " + to_string(host->oid()));
+    NebulaLog::debug("DrM", "Monitoring host: " + to_string(host->oid()) + ":" + host->name());
 
     auto driver = get_driver(host->im_mad());
 
@@ -51,20 +51,20 @@ int MonitorDriverManager::start_monitor(HostBase* host, bool update_remotes)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int MonitorDriverManager::stop_monitor(HostBase* host)
+int MonitorDriverManager::stop_monitor(int hid, const string& host_name, const string& im_mad)
 {
-    NebulaLog::debug("DrM", "Stop monitoring host id: " + to_string(host->oid()));
+    NebulaLog::debug("DrM", "Stop monitoring host: " + to_string(hid) + ":" + host_name);
 
-    auto driver = get_driver(host->im_mad());
+    auto driver = get_driver(im_mad);
 
     if (!driver)
     {
-        NebulaLog::error("DrM", "Could not find information driver " + host->im_mad());
+        NebulaLog::error("DrM", "Could not find information driver " + im_mad);
         return -1;
     }
 
     ostringstream oss;
-    oss << "STOPMONITOR " << host->oid() << " " << host->name() << " " << endl;
+    oss << "STOPMONITOR " << hid << " " << host_name << " " << endl;
     driver->write(oss.str());
 
     return 0;

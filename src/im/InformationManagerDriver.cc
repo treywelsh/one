@@ -39,33 +39,6 @@ InformationManagerDriver::~InformationManagerDriver(){};
 /* Driver ASCII Protocol Implementation                                       */
 /* ************************************************************************** */
 
-void InformationManagerDriver::monitor(int           oid,
-                                       const string& host,
-                                       const string& dsloc,
-                                       bool          update) const
-{
-    ostringstream os;
-
-    os << "MONITOR " << oid << " " << host << " " << dsloc << " " << update << endl;
-
-    Mad::write(os);
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-void InformationManagerDriver::stop_monitor(int oid, const string& host) const
-{
-    ostringstream os;
-
-    os << "STOPMONITOR " << oid << " " << host << " " << endl;
-
-    Mad::write(os);
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
 void InformationManagerDriver::protocol(const string& message) const
 {
     istringstream   is(message);

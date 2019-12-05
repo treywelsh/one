@@ -95,15 +95,7 @@ public:
      *    @param name of the host
      *    @param im_mad the driver name
      */
-    void stop_monitor(int hid, const string& name, const string& im_mad)
-    {
-        const InformationManagerDriver * imd = get(im_mad);
-
-        if (imd != 0)
-        {
-            imd->stop_monitor(hid, name);
-        }
-    }
+    void stop_monitor(int hid, const string& name, const string& im_mad);
 
     /**
      *  Starts the monitor process on the host

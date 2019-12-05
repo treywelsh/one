@@ -32,7 +32,7 @@ public:
     /**
      *  Start monitoring agent
      */
-    int stop_monitor(HostBase* host);
+    int stop_monitor(int hid, const string& host_name, const string& im_mad);
 
 };
 

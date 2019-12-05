@@ -43,6 +43,8 @@ const EString<OpenNebulaMessages> Message<OpenNebulaMessages>::_type_str({
     {"FINALIZE", OpenNebulaMessages::FINALIZE},
     {"UPDATE_HOST", OpenNebulaMessages::UPDATE_HOST},
     {"DEL_HOST", OpenNebulaMessages::DEL_HOST},
+    {"START_MONITOR", OpenNebulaMessages::START_MONITOR},
+    {"STOP_MONITOR", OpenNebulaMessages::STOP_MONITOR},
 });
 
 /* ************************************************************************** */

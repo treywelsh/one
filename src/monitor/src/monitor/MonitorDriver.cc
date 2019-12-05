@@ -40,20 +40,23 @@ MonitorDriver::MonitorDriver(MonitorDriverManager* mdm,
 
 void MonitorDriver::register_messages()
 {
-    dm->register_action(MonitorDriverMessages::UNDEFINED, bind(&MonitorDriver::_undefined, this, _1));
+    dm->register_action(MonitorDriverMessages::UNDEFINED, bind(&MonitorDriver::_monitor_undefined, _1));
     dm->register_action(MonitorDriverMessages::MONITOR_VM, bind(&MonitorDriver::_monitor_vm, this, _1));
     dm->register_action(MonitorDriverMessages::MONITOR_HOST, bind(&MonitorDriver::_monitor_host, this, _1));
     dm->register_action(MonitorDriverMessages::SYSTEM_HOST, bind(&MonitorDriver::_system_host, this, _1));
     dm->register_action(MonitorDriverMessages::STATE_VM, bind(&MonitorDriver::_state_vm, this, _1));
 
-    udp_stream->register_action(MonitorDriverMessages::UNDEFINED, bind(&MonitorDriver::_undefined, this, _1));
+    udp_stream->register_action(MonitorDriverMessages::UNDEFINED, bind(&MonitorDriver::_monitor_undefined, _1));
     udp_stream->register_action(MonitorDriverMessages::MONITOR_VM, bind(&MonitorDriver::_monitor_vm, this, _1));
     udp_stream->register_action(MonitorDriverMessages::MONITOR_HOST, bind(&MonitorDriver::_monitor_host, this, _1));
     udp_stream->register_action(MonitorDriverMessages::SYSTEM_HOST, bind(&MonitorDriver::_system_host, this, _1));
     udp_stream->register_action(MonitorDriverMessages::STATE_VM, bind(&MonitorDriver::_state_vm, this, _1));
 
+    oned_reader.register_action(OpenNebulaMessages::UNDEFINED, bind(&MonitorDriver::_undefined, _1));
     oned_reader.register_action(OpenNebulaMessages::UPDATE_HOST, bind(&MonitorDriver::_update_host, this, _1));
     oned_reader.register_action(OpenNebulaMessages::DEL_HOST, bind(&MonitorDriver::_del_host, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::START_MONITOR, bind(&MonitorDriver::_start_monitor, this, _1));
+    oned_reader.register_action(OpenNebulaMessages::STOP_MONITOR, bind(&MonitorDriver::_stop_monitor, this, _1));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -119,7 +122,8 @@ void MonitorDriver::thread_execute()
 
     for (auto& host : hpool->get_objects())
     {
-        dm->stop_monitor(static_cast<HostBase*>(host.second.get()));
+        auto h = static_cast<HostBase*>(host.second.get());
+        dm->stop_monitor(h->oid(), h->name(), h->im_mad());
     }
 }
 
@@ -151,6 +155,14 @@ bool MonitorDriver::pull_from_oned()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+void MonitorDriver::_undefined(unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void MonitorDriver::_update_host(unique_ptr<Message<OpenNebulaMessages>> msg)
 {
     auto h = hpool->get(msg->oid());
@@ -172,6 +184,52 @@ void MonitorDriver::_update_host(unique_ptr<Message<OpenNebulaMessages>> msg)
 void MonitorDriver::_del_host(unique_ptr<Message<OpenNebulaMessages>> msg)
 {
     hpool->erase(msg->oid());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void MonitorDriver::_start_monitor(unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    int oid = msg->oid();
+    auto host = hpool->get(oid);
+    if (!host)
+    {
+        NebulaLog::warn("MON", "Received start_monitor for unknown host id = " + to_string(oid));
+        return;
+    }
+
+    bool update_remotes;
+    istringstream iss(msg->payload());
+    iss >> update_remotes;
+
+    if (iss.fail())
+    {
+        NebulaLog::warn("MON", "Wrong format of start monitor msg: " + msg->payload());
+        return;
+    }
+
+    dm->start_monitor(host, true);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void MonitorDriver::_stop_monitor(unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    int oid = msg->oid();
+    string name;
+    string im_mad;
+
+    Template data;
+    data.from_xml(msg->payload());
+    if (!data.get("NAME", name) || !data.get("IM_MAD", im_mad))
+    {
+        NebulaLog::warn("MON", "Wrong format of stop monitor msg: " + msg->payload());
+        return;
+    }
+
+    dm->stop_monitor(oid, name, im_mad);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -277,8 +335,3 @@ void MonitorDriver::_state_vm(unique_ptr<Message<MonitorDriverMessages>> msg)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
-
-void MonitorDriver::_undefined(unique_ptr<Message<MonitorDriverMessages>> msg)
-{
-    NebulaLog::log("MON", Log::INFO, "Received UNDEFINED msg: " + msg->payload());
-}

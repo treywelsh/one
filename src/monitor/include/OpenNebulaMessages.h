@@ -25,10 +25,12 @@
 enum class OpenNebulaMessages : unsigned short int
 {
     UNDEFINED = 0,
-    INIT      = 1,
-    FINALIZE  = 2,
-    UPDATE_HOST = 3,
-    DEL_HOST  = 4,
+    INIT,
+    FINALIZE,
+    UPDATE_HOST,
+    DEL_HOST,
+    START_MONITOR,
+    STOP_MONITOR,
 };
 
 typedef StreamManager<OpenNebulaMessages> one_stream_t;

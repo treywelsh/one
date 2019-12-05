@@ -118,6 +118,31 @@ int InformationManager::start()
     return rc;
 }
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::stop_monitor(int hid, const string& name, const string& im_mad)
+{
+    auto * imd = get("monitor");
+
+    if (!imd)
+    {
+        NebulaLog::error("InM", "Could not find information driver 'monitor'");
+
+        return;
+    }
+
+    Template data;
+    data.add("NAME", name);
+    data.add("IM_MAD", im_mad);
+    string tmp;
+
+    Message<OpenNebulaMessages> msg;
+    msg.type(OpenNebulaMessages::STOP_MONITOR);
+    msg.oid(hid);
+    msg.payload(data.to_xml(tmp));
+    imd->write(msg);
+}
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -125,24 +150,23 @@ int InformationManager::start()
 int InformationManager::start_monitor(Host * host, bool update_remotes)
 {
     ostringstream oss;
-    string dsloc;
-
-    const InformationManagerDriver * imd;
 
     oss << "Monitoring host "<< host->get_name()<< " ("<< host->get_oid()<< ")";
     NebulaLog::log("InM",Log::DEBUG,oss);
 
-    imd = get(host->get_im_mad());
+    auto imd = get("monitor");
 
-    if (imd == 0)
+    if (!imd)
     {
-        host->error("Cannot find driver: " + host->get_im_mad());
+        host->error("Cannot find driver: 'monitor'");
         return -1;
     }
 
-    Nebula::instance().get_ds_location(dsloc);
-
-    imd->monitor(host->get_oid(), host->get_name(), dsloc, update_remotes);
+    Message<OpenNebulaMessages> msg;
+    msg.type(OpenNebulaMessages::START_MONITOR);
+    msg.oid(host->get_oid());
+    msg.payload(to_string(update_remotes));
+    imd->write(msg);
 
     return 0;
 }
