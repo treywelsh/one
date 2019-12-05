@@ -30,11 +30,11 @@ DIRNAME = File.dirname(__FILE__)
 
 class CollectdClient
 
-    def initialize(host, port, hypervisor, ds_location, retries)
+    def initialize(host, port, probe_args)
         open_socket(host, port)
         init_keys
 
-        probe_info(port, hypervisor, ds_location, retries)
+        probe_info(probe_args)
 
         @last_update = last_update
     end
@@ -58,7 +58,7 @@ class CollectdClient
 
         exit 0 if stop?
 
-        data = run_probes(probes, push_period)
+        data = run_probes(probes)
         client.send(data, protocol, cache)
 
         # Sleep during the Cycle
@@ -94,31 +94,20 @@ class CollectdClient
         @key_priv.private_decrypt(message)
     end
 
-    def probe_info(port, hypervisor, ds_location, retries)
-        @port           = port
-        @hypervisor     = hypervisor
-        @ds_location    = ds_location
-        @retries        = retries
+    def probe_info(arguments)
+        @probe_args = arguments
 
-        @yaml_hash = {
-            :port           => @port,
-            :hypervisor     => @hypervisor,
-            :ds_location    => @ds_location,
-            :retries        => @retries
-        }
-
-        @run_probes_cmd = File.join(DIRNAME, '..', 'run_probes')
-        @run_probes_cmd = "#{@run_probes_cmd} #{@hypervisor}-probes.d"
+        cmd = File.join(DIRNAME, '..', 'run_probes')
+        @run_probes_cmd = "#{cmd} #{arguments[:hypervisor]}-probes.d"
     end
 
-    def probe_cmd(dir, push_period)
-        stdin = @yaml_hash.merge(:push_period => push_period).to_yaml
-        cmd = "#{@run_probes_cmd}/#{dir} #{stdin}"
+    def probe_cmd(dir)
+        cmd = "#{@run_probes_cmd}/#{dir}"
 
-        Open3.capture2e(cmd)
+        Open3.capture2e(cmd, :stdin_data => @probe_args.to_yaml)
     end
 
-    def run_probes(dir, push_period)
+    def run_probes(dir)
         data, code = probe_cmd(dir, push_period)
 
         zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
@@ -183,7 +172,13 @@ retries      = ARGV[4]
 # Start push monitorization #
 #############################
 
-client = CollectdClient.new(host, port, hypervisor, ds_location, retries)
+probe_args = {
+    :hypervisor     => hypervisor,
+    :ds_location    => ds_location,
+    :retries        => retries
+}
+
+client = CollectdClient.new(host, port, probe_args)
 
 threads = []
 threads << Thread.new { client.monitor('host/system', push_periods[0], 'tcp') }
