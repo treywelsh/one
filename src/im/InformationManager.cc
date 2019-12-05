@@ -136,17 +136,9 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
 
     if (imd == 0)
     {
-        oss.str("");
-
-        oss << "Could not find information driver " << host->get_im_mad();
-        NebulaLog::log("InM",Log::ERROR,oss);
-
-        host->set_error();
-
+        host->error("Cannot find driver: " + host->get_im_mad());
         return -1;
     }
-
-    host->set_monitoring_state();
 
     Nebula::instance().get_ds_location(dsloc);
 
@@ -198,6 +190,7 @@ void InformationManager::delete_host(int hid)
 
 void InformationManager::timer_action(const ActionRequest& ar)
 {
+    /*
     static int mark = 0;
 
     int    rc;
@@ -285,5 +278,6 @@ void InformationManager::timer_action(const ActionRequest& ar)
 
         host->unlock();
     }
+    */
 }
 

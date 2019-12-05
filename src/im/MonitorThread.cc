@@ -102,13 +102,13 @@ void MonitorThread::do_message()
     // -------------------------------------------------------------------------
     if (result != "SUCCESS")
     {
-        set<int> vm_ids;
+        set<int> vm_ids = host->get_vm_ids();
 
-        host->error_info(*hinfo, vm_ids);
+        host->error(*hinfo);
 
-        for (set<int>::iterator it = vm_ids.begin(); it != vm_ids.end(); it++)
+        for (const auto& vm_id : vm_ids)
         {
-            lcm->trigger(LCMAction::MONITOR_DONE, *it);
+            lcm->trigger(LCMAction::MONITOR_DONE, vm_id);
         }
 
         delete hinfo;
@@ -130,15 +130,9 @@ void MonitorThread::do_message()
     {
         ostringstream ess;
 
-        ess << "Error parsing host " << host->get_oid() << " information: " 
-            << error_msg << ". Monitoring information: " << endl << *hinfo;
+        ess << "Parse error: " << error_msg;
 
-        NebulaLog::log("ONE", Log::ERROR, ess);
-
-        host->touch(false);
-
-        host->set_template_error_message("Error parsing monitor information."
-            " Check oned.log for more details.");
+        host->error(ess.str());
 
         free(error_msg);
 

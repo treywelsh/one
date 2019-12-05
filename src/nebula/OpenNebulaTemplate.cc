@@ -368,7 +368,6 @@ void OpenNebulaTemplate::set_conf_default()
 #  MONITORING_THREADS
 #  DS_MONITOR_VM_DISK
 #  HOST_PER_INTERVAL
-#  HOST_MONITORING_EXPIRATION_TIME
 #  VM_INDIVIDUAL_MONITORING
 #  VM_PER_INTERVAL
 #  VM_MONITORING_EXPIRATION_TIME
@@ -390,7 +389,6 @@ void OpenNebulaTemplate::set_conf_default()
     set_conf_single("MONITORING_THREADS", "50");
     set_conf_single("DS_MONITOR_VM_DISK", "10");
     set_conf_single("HOST_PER_INTERVAL", "15");
-    set_conf_single("HOST_MONITORING_EXPIRATION_TIME", "43200");
     set_conf_single("VM_INDIVIDUAL_MONITORING", "no");
     set_conf_single("VM_PER_INTERVAL", "5");
     set_conf_single("VM_MONITORING_EXPIRATION_TIME", "14400");

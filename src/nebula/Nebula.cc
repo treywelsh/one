@@ -672,13 +672,9 @@ void Nebula::start(bool bootstrap_only)
         /* ---------------------------- Host Pool --------------------------- */
         vector<const SingleAttribute *> host_encrypted_attrs;
 
-        time_t host_exp;
-
-        nebula_configuration->get("HOST_MONITORING_EXPIRATION_TIME", host_exp);
-
         nebula_configuration->get("HOST_ENCRYPTED_ATTR", host_encrypted_attrs);
 
-        hpool  = new HostPool(logdb, host_exp, host_encrypted_attrs);
+        hpool  = new HostPool(logdb, host_encrypted_attrs);
 
         /* --------------------- VirtualRouter Pool ------------------------- */
         vrouterpool = new VirtualRouterPool(logdb);

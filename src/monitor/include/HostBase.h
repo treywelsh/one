@@ -113,6 +113,44 @@ public:
      */
     friend ostream& operator<<(ostream& o, const HostBase& host);
 
+    /**
+     * Inserts the last monitoring, and deletes old monitoring entries for this
+     * host
+     *
+     * @param host pointer to the host object
+     * @return 0 on success
+     */
+    /*
+    int update_monitoring(Host * host)
+    {
+        if ( _monitor_expiration <= 0 )
+        {
+            return 0;
+        }
+
+        return host->update_monitoring(db);
+    };
+    */
+    /**
+     * Deletes the expired monitoring entries for all hosts
+     *
+     * @return 0 on success
+     */
+    /*
+    int clean_expired_monitoring();
+    */
+
+
+    /**
+     * Get the least monitored hosts
+     *   @param discovered hosts
+     *   @param host_limit max. number of hosts to monitor at a time
+     *   @param target_time Filters hosts with last_mon_time <= target_time
+     *   @return int 0 if success
+     */
+    /*
+    int discover(set<int> * discovered_hosts, int host_limit, time_t target_time);
+    */
 protected:
     int init_attributes();
 
@@ -123,13 +161,13 @@ private:
     std::string _vmm_mad;
     std::string _im_mad;
 
-    bool   _public_cloud   = false;
+    bool _public_cloud = false;
 
     ObjectCollection _vm_ids{"VMS"};
 
-    Template         _obj_template;
+    Template _obj_template;
 
-    time_t           _last_monitored = 0;
+    time_t   _last_monitored = 0;
 };
 
 #endif // HOST_BASE_H_

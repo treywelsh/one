@@ -15,10 +15,9 @@
 /* -------------------------------------------------------------------------- */
 
 #include "HostRPCPool.h"
-#include "NebulaLog.h"
 
-const char * monit_table = "host_monitoring_new";
-const char * monit_db_names = "hid, timestamp, body";
+#include "OneDB.h"
+#include "NebulaLog.h"
 
 int HostRPCPool::load_info(xmlrpc_c::value &result)
 {
@@ -48,26 +47,30 @@ int HostRPCPool::update_monitoring(const HostMonitoringTemplate& monitoring)
 
     if (sql_xml == 0)
     {
-        NebulaLog::log("HPL", Log::WARNING, "Could not transform Host monitoring to XML");
+        NebulaLog::log("HPL", Log::WARNING,
+                "Could not transform Host monitoring to XML");
+
         return -1;
     }
 
     if (ObjectXML::validate_xml(sql_xml) != 0)
     {
-        NebulaLog::log("HPL", Log::WARNING, "Could not transform Host monitoring to XML" + string(sql_xml));
+        NebulaLog::log("HPL", Log::WARNING, 
+                "Could not transform Host monitoring to XML" + string(sql_xml));
+
         db->free_str(sql_xml);
         return -1;
     }
 
     ostringstream oss;
-    oss << "REPLACE INTO " << monit_table << " ("<< monit_db_names <<") VALUES ("
-        <<          monitoring.oid()       << ","
-        <<          monitoring.timestamp() << ","
-        << "'" <<   sql_xml                 << "')";
+
+    oss << "REPLACE INTO " << one_db::host_monitor_table <<
+        " ("<< one_db::host_monitor_db_names <<") VALUES ("
+        << monitoring.oid() << ","
+        << monitoring.timestamp() << ","
+        << "'" << sql_xml << "')";
 
     db->free_str(sql_xml);
 
-    auto rc = db->exec_local_wr(oss);
-
-    return rc;
+    return db->exec_local_wr(oss);
 }

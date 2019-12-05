@@ -33,23 +33,10 @@
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-time_t HostPool::_monitor_expiration;
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-HostPool::HostPool(SqlDB * db, time_t expire_time,
-        vector<const SingleAttribute *>& encrypted_attrs) : PoolSQL(db, Host::table)
+HostPool::HostPool(SqlDB * db, vector<const SingleAttribute *>& ea) :
+            PoolSQL(db, one_db::host_table)
 {
-    _monitor_expiration = expire_time;
-
-    if ( _monitor_expiration == 0 )
-    {
-        clean_all_monitoring();
-    }
-
-    // Parse encrypted attributes
-    HostTemplate::parse_encrypted(encrypted_attrs);
+    HostTemplate::parse_encrypted(ea);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -174,38 +161,14 @@ int HostPool::update(PoolObjectSQL * objsql)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int HostPool::discover(
-        set<int> *  discovered_hosts,
-        int         host_limit,
-        time_t      target_time)
-{
-    ostringstream sql;
-    set_cb<int>   cb;
-
-    cb.set_callback(discovered_hosts);
-
-    sql << "SELECT oid FROM " << Host::table
-        << " WHERE last_mon_time <= " << target_time
-        << " ORDER BY last_mon_time ASC LIMIT " << host_limit;
-
-    int rc = db->exec_rd(sql, &cb);
-
-    cb.unset_callback();
-
-    return rc;
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
 int HostPool::dump_monitoring(
         string& oss,
         const string&  where)
 {
     ostringstream cmd;
 
-    cmd << "SELECT " << Host::monit_table << ".body FROM " << Host::monit_table
-        << " INNER JOIN " << Host::table
+    cmd << "SELECT " << one_db::host_monitor_table << ".body FROM "
+        << one_db::host_monitor_table << " INNER JOIN " << one_db::host_table
         << " WHERE hid = oid";
 
     if ( !where.empty() )
@@ -213,46 +176,8 @@ int HostPool::dump_monitoring(
         cmd << " AND " << where;
     }
 
-    cmd << " ORDER BY hid, " << Host::monit_table << ".last_mon_time;";
+    cmd << " ORDER BY hid, " << one_db::host_monitor_table << ".last_mon_time;";
 
     return PoolSQL::dump(oss, "MONITORING_DATA", cmd);
 }
 
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int HostPool::clean_expired_monitoring()
-{
-    if ( _monitor_expiration == 0 )
-    {
-        return 0;
-    }
-
-    int             rc;
-    time_t          max_mon_time;
-    ostringstream   oss;
-
-    max_mon_time = time(0) - _monitor_expiration;
-
-    oss << "DELETE FROM " << Host::monit_table
-        << " WHERE last_mon_time < " << max_mon_time;
-
-    rc = db->exec_local_wr(oss);
-
-    return rc;
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int HostPool::clean_all_monitoring()
-{
-    ostringstream   oss;
-    int             rc;
-
-    oss << "DELETE FROM " << Host::monit_table;
-
-    rc = db->exec_local_wr(oss);
-
-    return rc;
-}

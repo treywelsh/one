@@ -51,6 +51,7 @@ mon_env.Prepend(LIBS=[
     'nebula_xml',
     'nebula_parsers',
     'nebula_sql',
+    'nebula_sql_const',
     'crypto',
 #    'xml2'
 ])

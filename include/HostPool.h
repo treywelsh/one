@@ -26,18 +26,15 @@
 
 #include <vector>
 
-using namespace std;
-
 /**
  *  The Host Pool class.
  */
 class HostPool : public PoolSQL
 {
 public:
-    HostPool(SqlDB * db, time_t expire_time,
-        vector<const SingleAttribute *>& encrypted_attrs);
+    HostPool(SqlDB * db, std::vector<const SingleAttribute *>& secrets);
 
-    ~HostPool(){};
+    ~HostPool() = default;
 
     /**
      *  Function to allocate a new Host object
@@ -69,8 +66,7 @@ public:
      *    @param lock locks the Host mutex
      *    @return a pointer to the Host, 0 if the Host could not be loaded
      */
-    Host * get(
-        int     oid)
+    Host * get(int oid)
     {
         return static_cast<Host *>(PoolSQL::get(oid));
     };
@@ -81,8 +77,7 @@ public:
      *    @param oid Host unique id
      *    @return a pointer to the Host, 0 if the Host could not be loaded
      */
-    Host * get_ro(
-        int     oid)
+    Host * get_ro(int oid)
     {
         return static_cast<Host *>(PoolSQL::get_ro(oid));
     };
@@ -132,17 +127,16 @@ public:
      */
     static int bootstrap(SqlDB *_db)
     {
-        return Host::bootstrap(_db);
-    };
+        int rc;
 
-    /**
-     * Get the least monitored hosts
-     *   @param discovered hosts
-     *   @param host_limit max. number of hosts to monitor at a time
-     *   @param target_time Filters hosts with last_mon_time <= target_time
-     *   @return int 0 if success
-     */
-    int discover(set<int> * discovered_hosts, int host_limit, time_t target_time);
+        ostringstream oss_host(one_db::host_db_bootstrap);
+        ostringstream oss_monitor(one_db::host_monitor_db_bootstrap);
+
+        rc =  _db->exec_local_wr(oss_host);
+        rc += _db->exec_local_wr(oss_monitor);
+
+        return rc;
+    };
 
     /**
      * Allocates a given capacity to the host
@@ -225,7 +219,8 @@ public:
     int dump(string& oss, const string& where, const string& limit,
         bool desc)
     {
-        return PoolSQL::dump(oss, "HOST_POOL", "body", Host::table, where, limit, desc);
+        return PoolSQL::dump(oss, "HOST_POOL", "body", one_db::host_table,
+                where, limit, desc);
     };
 
     /**
@@ -238,7 +233,7 @@ public:
      */
     int search(vector<int>& oids, const string& where)
     {
-        return PoolSQL::search(oids, Host::table, where);
+        return PoolSQL::search(oids, one_db::host_table, where);
     };
 
     /**
@@ -269,30 +264,6 @@ public:
         return dump_monitoring(oss, filter.str());
     }
 
-    /**
-     * Inserts the last monitoring, and deletes old monitoring entries for this
-     * host
-     *
-     * @param host pointer to the host object
-     * @return 0 on success
-     */
-    int update_monitoring(Host * host)
-    {
-        if ( _monitor_expiration <= 0 )
-        {
-            return 0;
-        }
-
-        return host->update_monitoring(db);
-    };
-
-    /**
-     * Deletes the expired monitoring entries for all hosts
-     *
-     * @return 0 on success
-     */
-    int clean_expired_monitoring();
-
 private:
     /**
      *  Factory method to produce Host objects
@@ -302,31 +273,6 @@ private:
     {
         return new Host(-1,"","","",-1,"");
     };
-
-    /**
-     *  Callback function to get the IDs of the hosts to be monitored
-     *  (Host::discover)
-     *
-     *    @param _set the set<int>* of host ids
-     *    @param num the number of columns read from the DB
-     *    @param values the column values
-     *    @param names the column names
-     *
-     *    @return 0 on success
-     */
-    int discover_cb(void * _set, int num, char **values, char **names);
-
-    /**
-     * Deletes all monitoring entries for all hosts
-     *
-     * @return 0 on success
-     */
-    int clean_all_monitoring();
-
-    /**
-     * Size, in seconds, of the historical monitoring information
-     */
-    static time_t _monitor_expiration;
 };
 
 #endif /*HOST_POOL_H_*/

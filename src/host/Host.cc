@@ -33,13 +33,12 @@ Host::Host(
     const string& _vmm_mad_name,
     int           _cluster_id,
     const string& _cluster_name):
-        PoolObjectSQL(id,HOST,_hostname,-1,-1,"","",table),
+        PoolObjectSQL(id, HOST, _hostname, -1, -1, "", "", one_db::host_table),
         ClusterableSingle(_cluster_id, _cluster_name),
         state(INIT),
         prev_state(INIT),
         im_mad_name(_im_mad_name),
         vmm_mad_name(_vmm_mad_name),
-        last_monitored(0),
         vm_collection("VMS")
 {
     obj_template = new HostTemplate;
@@ -51,37 +50,6 @@ Host::Host(
     replace_template_attribute("VM_MAD", vmm_mad_name);
 }
 
-/* ************************************************************************ */
-/* Host :: Database Access Functions                                        */
-/* ************************************************************************ */
-
-const char * Host::table = "host_pool";
-
-const char * Host::db_names =
-    "oid, name, body, state, last_mon_time, uid, gid, owner_u, group_u, other_u, cid";
-
-const char * Host::db_bootstrap = "CREATE TABLE IF NOT EXISTS host_pool ("
-    "oid INTEGER PRIMARY KEY, name VARCHAR(128), body MEDIUMTEXT, state INTEGER, "
-    "last_mon_time INTEGER, uid INTEGER, gid INTEGER, owner_u INTEGER, "
-    "group_u INTEGER, other_u INTEGER, cid INTEGER)";
-
-
-const char * Host::monit_table = "host_monitoring";
-
-const char * Host::monit_db_names = "hid, last_mon_time, body";
-
-const char * Host::monit_db_bootstrap = "CREATE TABLE IF NOT EXISTS "
-    "host_monitoring (hid INTEGER, last_mon_time INTEGER, body MEDIUMTEXT, "
-    "PRIMARY KEY(hid, last_mon_time))";
-
-
-const char * Host::monit_table_new = "host_monitoring_new";
-
-const char * Host::monit_db_names_new = "hid, timestamp, body";
-
-const char * Host::monit_db_bootstrap_new = "CREATE TABLE IF NOT EXISTS "
-    "host_monitoring_new (hid INTEGER, timestamp INTEGER, body MEDIUMTEXT, "
-    "PRIMARY KEY(hid, timestamp))";
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -122,34 +90,33 @@ int Host::insert_replace(SqlDB *db, bool replace, string& error_str)
 
     if (replace)
     {
-        oss << "UPDATE " << table << " SET "
-            << "name = '"         << sql_hostname   << "', "
-            << "body = '"         << sql_xml        << "', "
-            << "state = "         << state          << ", "
-            << "last_mon_time = " << last_monitored << ", "
-            << "uid = "           << uid            << ", "
-            << "gid = "           << gid            << ", "
-            << "owner_u = "       << owner_u        << ", "
-            << "group_u = "       << group_u        << ", "
-            << "other_u = "       << other_u        << ", "
-            << "cid = "           << cluster_id
+        oss << "UPDATE " << one_db::host_table << " SET "
+            << "name = '" << sql_hostname << "', "
+            << "body = '" << sql_xml << "', "
+            << "state = " << state << ", "
+            << "uid = " << uid << ", "
+            << "gid = " << gid << ", "
+            << "owner_u = " << owner_u << ", "
+            << "group_u = " << group_u << ", "
+            << "other_u = " << other_u << ", "
+            << "cid = " << cluster_id
             << " WHERE oid = " << oid;
     }
     else
     {
         // Construct the SQL statement to Insert or Replace
-        oss << "INSERT INTO "<< table <<" ("<< db_names <<") VALUES ("
-            <<          oid                 << ","
-            << "'" <<   sql_hostname        << "',"
-            << "'" <<   sql_xml             << "',"
-            <<          state               << ","
-            <<          last_monitored      << ","
-            <<          uid                 << ","
-            <<          gid                 << ","
-            <<          owner_u             << ","
-            <<          group_u             << ","
-            <<          other_u             << ","
-            <<          cluster_id          << ")";
+        oss << "INSERT INTO "<< one_db::host_table
+            <<" ("<< one_db::host_db_names <<") VALUES ("
+            << oid << ","
+            << "'" << sql_hostname << "',"
+            << "'" << sql_xml << "',"
+            <<  state << ","
+            <<  uid << ","
+            <<  gid << ","
+            <<  owner_u << ","
+            <<  group_u << ","
+            <<  other_u << ","
+            <<  cluster_id << ")";
     }
 
     rc = db->exec_wr(oss);
@@ -205,11 +172,14 @@ int Host::update_info(Template &tmpl)
     remove_template_attribute("VM_POLL");
 
     // -------------------------------------------------------------------------
-    // Copy monitor, extract share info & update last_monitored and state
+    // Copy monitor, extract share info & update state
     // -------------------------------------------------------------------------
     obj_template->merge(&tmpl);
 
-    touch(true);
+    if ( state != OFFLINE && state != DISABLED )
+    {
+        state = MONITORED;
+    }
 
     string rcpu;
     string rmem;
@@ -269,108 +239,21 @@ void Host::offline()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-static Host::HostState trigger_state(Host::HostState state)
-{
-    switch(state)
-    {
-        case Host::INIT:
-        case Host::MONITORED:
-        case Host::ERROR:
-        case Host::DISABLED:
-        case Host::OFFLINE:
-            return state;
-        case Host::MONITORING_ERROR:
-            return Host::ERROR;
-        case Host::MONITORING_DISABLED:
-            return Host::DISABLED;
-        case Host::MONITORING_MONITORED:
-            return Host::MONITORED;
-        case Host::MONITORING_INIT:
-            return Host::INIT;
-    }
-
-    return state;
-}
-
-// -----------------------------------------------------------------------------
-
-bool Host::has_changed_state()
-{
-    return trigger_state(prev_state) != trigger_state(state);
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-void Host::error_info(const string& message, set<int> &vm_ids)
+void Host::error(const string& message)
 {
     ostringstream oss;
-
-    vm_ids = vm_collection.clone();
 
     oss << "Error monitoring Host " << get_name() << " (" << get_oid() << ")"
         << ": " << message;
 
     NebulaLog::log("ONE", Log::ERROR, oss);
 
-    touch(false);
+    if ( state != OFFLINE && state != DISABLED )
+    {
+        state = ERROR;
+    }
 
     set_template_error_message(oss.str());
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int Host::update_monitoring(SqlDB * db)
-{
-    ostringstream   oss;
-    int             rc;
-
-    string xml_body;
-    string error_str;
-    char * sql_xml;
-
-    sql_xml = db->escape_str(to_xml(xml_body));
-
-    if ( sql_xml == 0 )
-    {
-        goto error_body;
-    }
-
-    if ( validate_xml(sql_xml) != 0 )
-    {
-        goto error_xml;
-    }
-
-    oss << "REPLACE INTO " << monit_table << " ("<< monit_db_names <<") VALUES ("
-        <<          oid             << ","
-        <<          last_monitored       << ","
-        << "'" <<   sql_xml         << "')";
-
-    db->free_str(sql_xml);
-
-    rc = db->exec_local_wr(oss);
-
-    return rc;
-
-error_xml:
-    error_str = "could not transform the Host to XML: ";
-    error_str += sql_xml;
-
-    db->free_str(sql_xml);
-
-    goto error_common;
-
-error_body:
-    error_str = "could not insert the Host in the DB.";
-
-error_common:
-    oss.str("");
-    oss << "Error updating Host monitoring information, " << error_str;
-
-    NebulaLog::log("ONE",Log::ERROR, oss);
-
-    return -1;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -405,7 +288,6 @@ string& Host::to_xml(string& xml) const
        "<PREV_STATE>"    << prev_state       << "</PREV_STATE>"      <<
        "<IM_MAD>"        << one_util::escape_xml(im_mad_name)  << "</IM_MAD>" <<
        "<VM_MAD>"        << one_util::escape_xml(vmm_mad_name) << "</VM_MAD>" <<
-       "<LAST_MON_TIME>" << last_monitored   << "</LAST_MON_TIME>"   <<
        "<CLUSTER_ID>"    << cluster_id       << "</CLUSTER_ID>"      <<
        "<CLUSTER>"       << cluster          << "</CLUSTER>"         <<
        host_share.to_xml(share_xml)  <<
@@ -440,8 +322,6 @@ int Host::from_xml(const string& xml)
 
     rc += xpath(im_mad_name, "/HOST/IM_MAD", "not_found");
     rc += xpath(vmm_mad_name, "/HOST/VM_MAD", "not_found");
-
-    rc += xpath<time_t>(last_monitored, "/HOST/LAST_MON_TIME", 0);
 
     rc += xpath(cluster_id, "/HOST/CLUSTER_ID", -1);
     rc += xpath(cluster,    "/HOST/CLUSTER",    "not_found");
