@@ -18,51 +18,27 @@
 
 require 'yaml'
 require 'fileutils'
+require_relative '../../../lib/monitor_ds_common'
 
-def metric(dir, column)
-    metric =    `df -B1M -P #{dir} 2>/dev/null | tail -n 1 | \
-                 awk '{print $#{column}}'`.chomp
+yaml = YAML.load(STDIN.read).to_hash
 
-    return 0 if metric.empty?
+class DSMonitor
 
-    metric
-end
+    def location_metrics
+        "DS_LOCATION_#{total(@ds_location).delete(' ')}"
+    end
 
-yaml = STDIN.read
-yaml = YAML.safe_load yaml
-
-ds_location = yaml[:ds_location]
-ds_location ||= '/var/lib/one/datastores'
-FileUtils.mkdir_p ds_location
-
-puts "DS_LOCATION_USED_MB=#{metric(ds_location, 3)}"
-puts "DS_LOCATION_TOTAL_MB=#{metric(ds_location, 2)}"
-puts "DS_LOCATION_FREE_MB=#{metric(ds_location, 4)}"
-
-Dir.chdir ds_location
-datastores = Dir.glob('*').select {|f| File.directory?(f) && f.match(/^\d+$/) }
-datastores.each do |ds|
-    dir = "#{ds_location}/#{ds}"
-
-    data = <<EOT
+    def usage(ds_id)
+        string = <<EOT
 DS = [
   ID = #{ds_id},
-  USED_MB = #{metric(dir, 3)},
-  TOTAL_MB = #{metric(dir, 2)},
-  FREE_MB = #{metric(dir, 4)}
+  #{total(ds_id)}
 ]
 EOT
+        puts string
+    end
 
-    puts data
-
-    # Skip if datastore is not marked for local monitoring
-    mark = "#{dir}/.monitor"
-
-    next unless File.exist? mark
-
-    driver = File.read mark
-    driver ||= 'ssh'
-
-    tm_script = "#{__dir__}/../../../../tm/#{driver}/monitor_ds"
-    `#{tm_script} #{dir}` if File.exist? tm_script
 end
+
+monitor = DSMonitor.new yaml
+monitor.dss_metrics
