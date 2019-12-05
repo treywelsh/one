@@ -17,17 +17,15 @@
 #ifndef MONITOR_H_
 #define MONITOR_H_
 
-#include <thread>
+#include <memory>
 
 #include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
 #include "MonitorDriverManager.h"
 #include "MonitorDriverMessages.h"
-#include "OpenNebulaDriver.h"
-#include "OpenNebulaMessages.h"
 
-class Monitor : public NebulaService, public OpenNebulaDriver
+class Monitor : public NebulaService
 {
 public:
     /**
@@ -40,29 +38,7 @@ public:
      */
     void thread_execute();
 
-protected:
-    /**
-     *  Reads data from oned
-     *   @return false if the OpenNebula service is not available
-     **/
-    bool pull_from_oned();
-
-    // Oned message handlers
-    void process_update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-    void process_del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-
-    // Monitor driver message handlers
-    void process_monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void process_monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void process_monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void process_system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void process_state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void process_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-
 private:
-    std::unique_ptr<std::thread> monitor_thread;
-    std::atomic<bool>            terminate{false};
-
     // ---------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------

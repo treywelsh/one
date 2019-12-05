@@ -41,13 +41,10 @@ public:
     {
     }
 
-    UDPStream(const std::string &a, const std::string &p, callback_t error):
-        StreamManager<E>(error), _socket(-1), _address(a)
+    UDPStream(const std::string &address, unsigned int port):
+        _socket(-1), _address(address), _port(port)
     {
-        std::istringstream iss(p);
-
-        iss >> _port;
-    };
+    }
 
     /**
      *  This functions initializes the UDP socket for the stream. It must be

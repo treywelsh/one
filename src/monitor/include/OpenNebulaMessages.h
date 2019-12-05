@@ -14,8 +14,8 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef OPENNEBULA_STREAM_H
-#define OPENNEBULA_STREAM_H
+#ifndef OPENNEBULA_MESSAGES_H
+#define OPENNEBULA_MESSAGES_H
 
 #include "StreamManager.h"
 
@@ -33,4 +33,4 @@ enum class OpenNebulaMessages : unsigned short int
 
 typedef StreamManager<OpenNebulaMessages> one_stream_t;
 
-#endif /*OPENNEBULA_STREAM_H*/
+#endif /*OPENNEBULA_MESSAGES_H*/

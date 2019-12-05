@@ -14,8 +14,8 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_DRIVER_H_
-#define MONITOR_DRIVER_H_
+#ifndef MONITOR_DRIVER_MESSAGES_H_
+#define MONITOR_DRIVER_MESSAGES_H_
 
 #include "Driver.h"
 #include "UDPStream.h"
@@ -38,4 +38,4 @@ typedef Driver<MonitorDriverMessages> driver_t;
 
 typedef UDPStream<MonitorDriverMessages> udp_streamer_t;
 
-#endif /*MONITOR_DRIVER_H_*/
+#endif /*MONITOR_DRIVER_MESSAGES_H_*/
