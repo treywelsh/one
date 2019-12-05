@@ -18,11 +18,15 @@ define(function(require) {
   var Locale = require("utils/locale");
   var TemplateUtils = require("utils/template-utils");
   var VNetsTable = require("tabs/vnets-tab/datatable");
+  var VNetsTemplateTable = require("../tabs/vnets-templates-tab/datatable");
   var RangeSlider = require("utils/range-slider");
   var UniqueId = require("utils/unique-id");
 
   var TemplateHTML = require("hbs!./user-inputs/table");
   var RowTemplateHTML = require("hbs!./user-inputs/row");
+
+  var network_attrs = [];
+  var input_attrs = [];
 
 
   //==============================================================================
@@ -287,9 +291,6 @@ define(function(require) {
       opts.network_header = Locale.tr("Network");
     }
 
-    var network_attrs = [];
-    var input_attrs = [];
-
     $.each(user_inputs, function(key, value) {
       var attrs = _parse(key, value);
 
@@ -323,27 +324,58 @@ define(function(require) {
 
       var vnetsTable;
       $.each(network_attrs, function(index, vnet_attr) {
+        //JRGE
         var unique_id = "vnet_user_input_" + UniqueId.id();
         vnetsTable = new VNetsTable(unique_id, {"select": true});
-
-        $(".instantiate_user_inputs", div).append(
-          "<div class=\"row\">" +
-            "<div class=\"large-12 large-centered columns\">" +
-              separator +
-              "<h5>" +
-                TemplateUtils.htmlEncode(vnet_attr.description) +
-              "</h5>" +
-              vnetsTable.dataTableHTML +
-            "</div>" +
-          "</div>");
-
+        $(".instantiate_user_inputs", div).append("<div class=\"row\"><div class=\"large-12 large-centered columns\">"+separator+"<h5>"+TemplateUtils.htmlEncode(vnet_attr.description)+"</h5><div class='row'><div class='columns small-12'><select class='changePlaceDatatable' data-nametable='"+vnet_attr.name+"' data-idtable='"+unique_id+"' data-id='"+index+"'><option value='existing'>"+Locale.tr("Existing")+"</option><option value='create'>"+Locale.tr("Create")+"</option><option value='reserve'>"+Locale.tr("Reserve")+"</option></select></div><div class='columns small-12' id='placeDatatable_"+index+"'>"+vnetsTable.dataTableHTML +"</div></div></div></div>");
         separator = "<hr/>";
-
         vnetsTable.initialize();
-
         $("#refresh_button_" + unique_id).click();
-
         vnetsTable.idInput().attr("wizard_field", vnet_attr.name).attr("required", "");
+      });
+
+      $(".changePlaceDatatable").change(function(e){
+        // faltaria hacer los default!!!
+        e.preventDefault();
+        var element = $(this);
+        var id = element.attr("data-id");
+        var idtable = element.attr("data-idtable");
+        var nametable = element.attr("data-nametable");
+        var value = element.val();
+        var place = $("#placeDatatable_"+id);
+
+        //create a table
+        if(value === "reserve" || value === "existing"){
+          var vnetsTable = new VNetsTable(idtable, {"select": true});
+          place.empty().append(vnetsTable.dataTableHTML);
+          vnetsTable.initialize();
+          $("#refresh_button_"+idtable).click();
+          vnetsTable.idInput().attr("wizard_field", nametable).attr("required", "");
+        }else{
+          var vnetsTemplateTable = new VNetsTemplateTable(idtable, {"select": true});
+          place.empty().append(vnetsTemplateTable.dataTableHTML);
+          vnetsTemplateTable.initialize();
+          $("#refresh_button_"+idtable).click();
+          vnetsTemplateTable.idInput().attr("wizard_field", nametable).attr("required", "");
+        }
+
+        // create input extra
+        if(value === "create" || value === "reserve"){
+          // falta colocar el render de las diferentes tablas!!!
+          if(!place.find(".addExtra_"+id).length){
+            place.append(
+              $("<div/>",{class:"row addExtra_"+id}).append(
+                $("<div/>",{class:"columns small-12"}).append(
+                  $("<label/>").text(Locale.tr("Extra")).add(
+                    $("<input/>",{type:"text", name: "extra",id: "extra",placeholder: Locale.tr("Extra") })
+                  )
+                )
+              )
+            );
+          }
+        }else{
+          place.find(".addExtra_"+id).remove();
+        }
       });
     }
 
