@@ -24,6 +24,12 @@
 class MonitorDriverManager : public DriverManager<MonitorDriverMessages>
 {
 public:
+    explicit MonitorDriverManager(
+            const string& mad_location)
+        : DriverManager(mad_location)
+    {
+    }
+
     /**
      *  Start monitoring agent
      */

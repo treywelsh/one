@@ -935,31 +935,22 @@ void Nebula::start(bool bootstrap_only)
     // ---- Information Manager ----
     if (!cache)
     {
-        try
+        vector<const VectorAttribute *> im_mads;
+
+        int host_limit;
+
+        nebula_configuration->get("HOST_PER_INTERVAL", host_limit);
+        nebula_configuration->get("IM_MAD", im_mads);
+
+        im = new InformationManager(hpool,
+                                    timer_period,
+                                    //monitor_interval_host,
+                                    //host_limit,
+                                    mad_location);
+
+        if (im->load_drivers(im_mads) != 0)
         {
-            vector<const VectorAttribute *> im_mads;
-
-            int host_limit;
-            int monitor_threads;
-
-            nebula_configuration->get("HOST_PER_INTERVAL", host_limit);
-
-            nebula_configuration->get("MONITORING_THREADS", monitor_threads);
-
-            nebula_configuration->get("IM_MAD", im_mads);
-
-            im = new InformationManager(hpool,
-                                        clpool,
-                                        timer_period,
-                                        monitor_interval_host,
-                                        host_limit,
-                                        monitor_threads,
-                                        remotes_location,
-                                        im_mads);
-        }
-        catch (bad_alloc&)
-        {
-            throw;
+            goto error_mad;
         }
 
         rc = im->start();
@@ -1140,11 +1131,6 @@ void Nebula::start(bool bootstrap_only)
             goto error_mad;
         }
 
-        if (im->load_mads(0) != 0)
-        {
-            goto error_mad;
-        }
-
         if (tm->load_mads(0) != 0)
         {
             goto error_mad;
@@ -1278,7 +1264,7 @@ void Nebula::start(bool bootstrap_only)
         pthread_join(tm->get_thread_id(),0);
         pthread_join(dm->get_thread_id(),0);
 
-        pthread_join(im->get_thread_id(),0);
+        im->join_thread();
         pthread_join(hm->get_thread_id(),0);
         pthread_join(imagem->get_thread_id(),0);
         pthread_join(marketm->get_thread_id(),0);

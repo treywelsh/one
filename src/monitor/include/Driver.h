@@ -88,6 +88,14 @@ public:
     };
 
     /**
+     *  Send a message to the driver
+     */
+    void write(const Message<E>& msg) const
+    {
+        msg.write_to(to_drv, false);
+    };
+
+    /**
      *  Register an action for a given message type. This function needs to be
      *  call before using start
      *    @param t message type

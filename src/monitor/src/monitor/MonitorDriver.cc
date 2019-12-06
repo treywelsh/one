@@ -169,6 +169,10 @@ void MonitorDriver::_update_host(unique_ptr<Message<OpenNebulaMessages>> msg)
     if (h)
     {
         h->from_xml(msg->payload());
+
+        string str_state;
+        NebulaLog::debug("MON", "Host updated id = " + to_string(h->oid())
+            + ", state = " + Host::state_to_str(str_state, h->state()));
     }
     else
     {
@@ -310,6 +314,20 @@ void MonitorDriver::_monitor_host(unique_ptr<Message<MonitorDriverMessages>> msg
         host->last_monitored(monitoring.timestamp());
 
         NebulaLog::log("MON", Log::INFO, "Monitoring succesfully written to DB");
+
+        // Send host state update to oned
+        if (host->state() != Host::HostState::MONITORED &&
+            host->state() != Host::HostState::DISABLED)
+        {
+            string state;
+            Host::state_to_str(state, Host::HostState::MONITORED);
+
+            Message<OpenNebulaMessages> oned_msg;
+            oned_msg.type(OpenNebulaMessages::HOST_STATE);
+            oned_msg.oid(msg->oid());
+            oned_msg.payload(state);
+            write2one(oned_msg);
+        }
     }
     catch(const exception &e)
     {

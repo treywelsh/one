@@ -155,6 +155,8 @@ int HostPool::update(PoolObjectSQL * objsql)
 
     host->set_prev_state();
 
+    Nebula::instance().get_im()->update_host(host);
+
     return host->update(db);
 }
 

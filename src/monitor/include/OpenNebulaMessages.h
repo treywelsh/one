@@ -31,6 +31,7 @@ enum class OpenNebulaMessages : unsigned short int
     DEL_HOST,
     START_MONITOR,
     STOP_MONITOR,
+    HOST_STATE,
 };
 
 typedef StreamManager<OpenNebulaMessages> one_stream_t;

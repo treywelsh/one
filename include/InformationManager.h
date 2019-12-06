@@ -17,46 +17,33 @@
 #ifndef INFORMATION_MANAGER_H_
 #define INFORMATION_MANAGER_H_
 
-#include "MadManager.h"
+#include "DriverManager.h"
 #include "ActionManager.h"
-#include "InformationManagerDriver.h"
-#include "MonitorThread.h"
-#include "NebulaLog.h"
-
-using namespace std;
-
-extern "C" void * im_action_loop(void *arg);
+#include "OpenNebulaMessages.h"
 
 class HostPool;
-class ClusterPool;
 class Host;
 
-class InformationManager : public MadManager, public ActionListener
+class InformationManager : public DriverManager<OpenNebulaMessages>, public ActionListener
 {
 public:
 
     InformationManager(
         HostPool *                  _hpool,
-        ClusterPool *               _clpool,
         time_t                      _timer_period,
-        time_t                      _monitor_period,
-        int                         _host_limit,
-        int                         _monitor_threads,
-        const string&               _remotes_location,
-        vector<const VectorAttribute*>&   _mads)
-            :MadManager(_mads),
-            hpool(_hpool),
-            clpool(_clpool),
-            timer_period(_timer_period),
-            monitor_period(_monitor_period),
-            host_limit(_host_limit),
-            remotes_location(_remotes_location),
-            mtpool(_monitor_threads)
+        // time_t                      _monitor_period,
+        // int                         _host_limit,
+        const string& mad_location)
+            : DriverManager(mad_location)
+            , hpool(_hpool)
+            , timer_period(_timer_period)
+            // monitor_period(_monitor_period),
+            // host_limit(_host_limit),
     {
         am.addListener(this);
-    };
+    }
 
-    ~InformationManager(){};
+    ~InformationManager() = default;
 
     /**
      *  This functions starts the associated listener thread, and creates a
@@ -67,12 +54,11 @@ public:
     int start();
 
     /**
-     *  Gets the thread identification.
-     *    @return pthread_t for the manager thread (that in the action loop).
+     *  Join the action loop thread
      */
-    pthread_t get_thread_id() const
+    void join_thread()
     {
-        return im_thread;
+        return im_thread.join();
     };
 
     /**
@@ -82,12 +68,6 @@ public:
     {
         am.finalize();
     };
-
-    /**
-     *   Load the information drivers
-     *     @return 0 on success
-     */
-    int load_mads(int uid=0);
 
     /**
      *  Sends a STOPMONITR command to the associated driver and host
@@ -115,21 +95,27 @@ public:
      */
     void delete_host(int hid);
 
+protected:
+    /**
+     *  Received undefined message -> print error
+     */
+    static void _undefined(unique_ptr<Message<OpenNebulaMessages>> msg);
+
+    /**
+     *  Message HOST_STATE update from monitor
+     */
+    void _host_state(unique_ptr<Message<OpenNebulaMessages>> msg);
+
 private:
     /**
-     *  Thread id for the Information Manager
+     *  Thread for the Information Manager
      */
-    pthread_t       im_thread;
+    std::thread     im_thread;
 
     /**
      *  Pointer to the Host Pool
      */
     HostPool *      hpool;
-
-    /**
-     *  Pointer to the Cluster Pool
-     */
-    ClusterPool *   clpool;
 
     /**
      *  Timer period for the Virtual Machine Manager.
@@ -139,17 +125,12 @@ private:
     /**
      *  Host monitoring interval
      */
-    time_t          monitor_period;
+    //time_t          monitor_period;
 
     /**
      *  Host monitoring limit
      */
-    int             host_limit;
-
-   /**
-    *  Path for the remote action programs
-    */
-    string          remotes_location;
+    //int             host_limit;
 
     /**
      *  Action engine for the Manager
@@ -157,35 +138,9 @@ private:
     ActionManager   am;
 
     /**
-     *  Pool of threads to process each monitor message
-     */
-    MonitorThreadPool mtpool;
-
-    /**
      *  Time in seconds to expire a monitoring action (5 minutes)
      */
-    static const time_t monitor_expire;
-
-    /**
-     *  Returns a pointer to a Information Manager MAD. The driver is
-     *  searched by its name and owned by gwadmin with uid=0.
-     *    @param name of the driver
-     *    @return the VM driver owned by uid 0, with attribute "NAME" equal to
-     *    name or 0 in not found
-     */
-    const InformationManagerDriver * get(
-        const string&   name)
-    {
-        string _name("NAME");
-        return static_cast<const InformationManagerDriver *>
-               (MadManager::get(0,_name,name));
-    };
-
-    /**
-     *  Function to execute the Manager action loop method within a new pthread
-     * (requires C linkage)
-     */
-    friend void * im_action_loop(void *arg);
+    //static const time_t monitor_expire;
 
     // ------------------------------------------------------------------------
     // ActioListener Interface
@@ -193,13 +148,13 @@ private:
     /**
      *  This function is executed periodically to monitor Nebula hosts.
      */
-    void timer_action(const ActionRequest& ar);
+    void timer_action(const ActionRequest& ar) override;
 
-    void finalize_action(const ActionRequest& ar)
+    void finalize_action(const ActionRequest& ar) override
     {
         NebulaLog::log("InM",Log::INFO,"Stopping Information Manager...");
 
-        MadManager::stop();
+        stop();
     };
 };
 

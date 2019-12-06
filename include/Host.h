@@ -195,6 +195,15 @@ public:
     };
 
     /**
+     * Retrieves host state
+     *    @return HostState code number
+     */
+    void set_state(HostState new_state)
+    {
+        state = new_state;
+    };
+
+    /**
      * Retrieves VMM mad name
      *    @return string vmm mad name
      */

@@ -19,18 +19,21 @@
 
 #include "Driver.h"
 #include "Attribute.h"
-#include "NebulaService.h"
+#include "NebulaLog.h"
 #include <string>
 
 template<typename E>
 class DriverManager
 {
 public:
-    DriverManager() {}
+    explicit DriverManager(const string& mad_location)
+        : mad_location(mad_location)
+    {
+    }
 
     virtual ~DriverManager() = default;
 
-    int load_drivers(std::vector<const VectorAttribute*> &conf);
+    int load_drivers(const vector<const VectorAttribute*>& mads_config);
 
     Driver<E>* get_driver(const std::string& name) const;
 
@@ -53,17 +56,19 @@ public:
 
 private:
     std::map<std::string, std::unique_ptr<Driver<E>>> drivers;
+
+    string mad_location;
 };
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 template<typename E>
-int DriverManager<E>::load_drivers(vector<const VectorAttribute*> &conf)
+int DriverManager<E>::load_drivers(const vector<const VectorAttribute*>& mads_config)
 {
     NebulaLog::info("DrM", "Loading drivers.");
 
-    for (const auto& vattr : conf)
+    for (const auto& vattr : mads_config)
     {
         auto name = vattr->vector_value("NAME");
         auto exec = vattr->vector_value("EXECUTABLE");
@@ -82,7 +87,7 @@ int DriverManager<E>::load_drivers(vector<const VectorAttribute*> &conf)
 
         if (exec[0] != '/') //Look in ONE_LOCATION/lib/mads or in "/usr/lib/one/mads"
         {
-            exec = NebulaService::instance().get_mad_location() + exec;
+            exec = mad_location + exec;
         }
 
         if (access(exec.c_str(), F_OK) != 0)

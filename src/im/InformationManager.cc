@@ -15,105 +15,41 @@
 /* -------------------------------------------------------------------------- */
 
 #include "InformationManager.h"
-#include "Cluster.h"
-#include "Nebula.h"
+//#include "Cluster.h"
+//#include "Nebula.h"
 #include "HostPool.h"
-#include "RaftManager.h"
+//#include "RaftManager.h"
 #include "OpenNebulaMessages.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <utime.h>
 
-
-const time_t InformationManager::monitor_expire = 300;
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-extern "C" void * im_action_loop(void *arg)
-{
-    InformationManager *  im;
-
-    if ( arg == 0 )
-    {
-        return 0;
-    }
-
-    NebulaLog::log("InM",Log::INFO,"Information Manager started.");
-
-    im = static_cast<InformationManager *>(arg);
-
-    im->am.loop(im->timer_period);
-
-    NebulaLog::log("InM",Log::INFO,"Information Manager stopped.");
-
-    return 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-int InformationManager::load_mads(int uid)
-{
-    InformationManagerDriver *  im_mad;
-    unsigned int                i;
-    ostringstream               oss;
-    const VectorAttribute *     vattr;
-    int                         rc;
-
-    NebulaLog::log("InM",Log::INFO,"Loading Information Manager drivers.");
-
-    for(i=0;i<mad_conf.size();i++)
-    {
-        vattr = static_cast<const VectorAttribute *>(mad_conf[i]);
-
-        oss.str("");
-        oss << "\tLoading driver: " << vattr->vector_value("NAME");
-
-        NebulaLog::log("InM",Log::INFO,oss);
-
-        im_mad = new InformationManagerDriver(0,vattr->value(),false,&mtpool);
-
-        rc = add(im_mad);
-
-        if ( rc == 0 )
-        {
-            oss.str("");
-            oss << "\tDriver " << vattr->vector_value("NAME") << " loaded";
-
-            NebulaLog::log("InM",Log::INFO,oss);
-        }
-        else
-        {
-            return -1;
-        }
-    }
-
-    return 0;
-}
+//const time_t InformationManager::monitor_expire = 300;
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
 int InformationManager::start()
 {
-    int               rc;
-    pthread_attr_t    pattr;
+    using namespace std::placeholders; // for _1
 
-    rc = MadManager::start();
+    register_action(OpenNebulaMessages::UNDEFINED, bind(&InformationManager::_undefined, _1));
+    register_action(OpenNebulaMessages::HOST_STATE, bind(&InformationManager::_host_state, this, _1));
+
+    int rc = DriverManager::start();
 
     if ( rc != 0 )
     {
         return -1;
     }
 
-    NebulaLog::log("InM",Log::INFO,"Starting Information Manager...");
+    NebulaLog::info("InM", "Starting Information Manager...");
 
-    pthread_attr_init (&pattr);
-    pthread_attr_setdetachstate (&pattr, PTHREAD_CREATE_JOINABLE);
+    im_thread = std::thread([&] {
+        NebulaLog::info("InM", "Information Manager started.");
 
-    rc = pthread_create(&im_thread,&pattr,im_action_loop,(void *) this);
+        am.loop(timer_period);
+
+        NebulaLog::info("InM", "Information Manager stopped.");
+    });
 
     return rc;
 }
@@ -123,7 +59,7 @@ int InformationManager::start()
 
 void InformationManager::stop_monitor(int hid, const string& name, const string& im_mad)
 {
-    auto * imd = get("monitor");
+    auto * imd = get_driver("monitor");
 
     if (!imd)
     {
@@ -154,7 +90,7 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
     oss << "Monitoring host "<< host->get_name()<< " ("<< host->get_oid()<< ")";
     NebulaLog::log("InM",Log::DEBUG,oss);
 
-    auto imd = get("monitor");
+    auto imd = get_driver("monitor");
 
     if (!imd)
     {
@@ -176,7 +112,7 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
 
 void InformationManager::update_host(Host *host)
 {
-    auto imd = get("monitor");
+    auto imd = get_driver("monitor");
 
     if (!imd)
     {
@@ -196,7 +132,7 @@ void InformationManager::update_host(Host *host)
 
 void InformationManager::delete_host(int hid)
 {
-    auto imd = get("monitor");
+    auto imd = get_driver("monitor");
 
     if (!imd)
     {
@@ -207,6 +143,53 @@ void InformationManager::delete_host(int hid)
     msg.type(OpenNebulaMessages::DEL_HOST);
     msg.oid(hid);
     imd->write(msg);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::_undefined(unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    NebulaLog::warn("InM", "Received undefined message: " + msg->payload());
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::_host_state(unique_ptr<Message<OpenNebulaMessages>> msg)
+{
+    NebulaLog::warn("InM", "Received host_state message: " + msg->payload());
+
+    string str_state = msg->payload();
+    Host::HostState new_state;
+    if (Host::str_to_state(str_state, new_state) != 0)
+    {
+        NebulaLog::warn("InM", "Unable to decode host state: " + str_state);
+        return;
+    }
+
+    Host* host = hpool->get(msg->oid());
+
+    if (host == nullptr)
+    {
+        return;
+    }
+
+    if (host->get_state() == Host::OFFLINE) // Should not receive any info
+    {
+        host->unlock();
+
+        return;
+    }
+
+    if (host->get_state() != new_state)
+    {
+        host->set_state(new_state);
+
+        hpool->update(host);
+    }
+
+    host->unlock();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -305,3 +288,136 @@ void InformationManager::timer_action(const ActionRequest& ar)
     */
 }
 
+// Old processing of monitoring message
+// void MonitorThread::do_message()
+// {
+//     // -------------------------------------------------------------------------
+//     // Decode from base64, check if it is compressed
+//     // -------------------------------------------------------------------------
+//     string* hinfo = one_util::base64_decode(hinfo64);
+//     string* zinfo = one_util::zlib_decompress(*hinfo, false);
+
+//     if ( zinfo != 0 )
+//     {
+//         delete hinfo;
+
+//         hinfo = zinfo;
+//     }
+
+//     Host* host = hpool->get(host_id);
+
+//     if ( host == 0 )
+//     {
+//         delete hinfo;
+//         return;
+//     }
+
+//     if ( host->get_state() == Host::OFFLINE ) //Should not receive any info
+//     {
+//         delete hinfo;
+
+//         host->unlock();
+
+//         return;
+//     }
+
+//     // -------------------------------------------------------------------------
+//     // Monitoring Error. VMs running on the host are moved to UNKNOWN
+//     // -------------------------------------------------------------------------
+//     if (result != "SUCCESS")
+//     {
+//         set<int> vm_ids = host->get_vm_ids();
+
+//         host->error(*hinfo);
+
+//         for (const auto& vm_id : vm_ids)
+//         {
+//             lcm->trigger(LCMAction::MONITOR_DONE, vm_id);
+//         }
+
+//         delete hinfo;
+
+//         hpool->update(host);
+
+//         host->unlock();
+
+//         return;
+//     }
+
+//     // -------------------------------------------------------------------------
+//     // Parse Moniroting Information
+//     // -------------------------------------------------------------------------
+//     Template tmpl;
+//     char*    error_msg;
+
+//     if ( tmpl.parse(*hinfo, &error_msg) != 0 )
+//     {
+//         ostringstream ess;
+
+//         ess << "Parse error: " << error_msg;
+
+//         host->error(ess.str());
+
+//         free(error_msg);
+
+//         delete hinfo;
+
+//         return;
+//     }
+
+//     delete hinfo;
+
+//     // -------------------------------------------------------------------------
+//     // Label local system datastores to include them in the HostShare
+//     // -------------------------------------------------------------------------
+//     vector<VectorAttribute*> vector_ds;
+
+//     tmpl.get("DS", vector_ds);
+
+//     for (auto& ds : vector_ds)
+//     {
+//         int dsid;
+
+//         int rc = ds->vector_value("ID", dsid);
+
+//         if (rc != 0 || dsid == -1)
+//         {
+//             continue;
+//         }
+
+//         auto ds_ptr = dspool->get_ro(dsid);
+
+//         if (ds_ptr == 0)
+//         {
+//             continue;
+//         }
+
+//         if (ds_ptr->get_type() == Datastore::SYSTEM_DS && !ds_ptr->is_shared())
+//         {
+//             ds->replace("LOCAL_SYSTEM_DS", true);
+//         }
+
+//         ds_ptr->unlock();
+//     }
+
+//     // -------------------------------------------------------------------------
+//     // Update Host information
+//     // -------------------------------------------------------------------------
+//     if (host->update_info(tmpl) != 0)
+//     {
+//         host->unlock();
+
+//         return;
+//     }
+
+//     hpool->update(host);
+
+//     std::ostringstream oss;
+
+//     oss << "Host " << host->get_name() << " (" << host->get_oid() << ")"
+//         << " successfully monitored.";
+
+//     NebulaLog::log("InM", Log::DEBUG, oss);
+
+//     host->unlock();
+// };
