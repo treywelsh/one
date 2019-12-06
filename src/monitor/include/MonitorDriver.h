@@ -68,7 +68,7 @@ protected:
     void _state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
 
 private:
-    std::unique_ptr<std::thread> monitor_thread;
+    std::thread                  monitor_thread;
     std::atomic<bool>            terminate{false};
 
     MonitorDriverManager* dm;

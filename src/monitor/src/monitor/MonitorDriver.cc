@@ -70,7 +70,7 @@ void MonitorDriver::start()
 
     NebulaLog::log("MON", Log::INFO, "Starting monitor loop...");
 
-    monitor_thread.reset(new thread(&MonitorDriver::thread_execute, this));
+    monitor_thread = thread(&MonitorDriver::thread_execute, this);
 
     // -----------------------------------------------------------
     // Start oned reader loop
@@ -80,7 +80,7 @@ void MonitorDriver::start()
 
     //signal monitor_thread
     terminate = true;
-    monitor_thread->join();
+    monitor_thread.join();
 }
 
 /* -------------------------------------------------------------------------- */
