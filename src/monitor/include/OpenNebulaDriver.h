@@ -52,8 +52,6 @@ public:
         oned_reader.action_loop(0);
     }
 
-    // TODO method for write Message<E> to oned
-
 protected:
     using message_t = std::unique_ptr<Message<OpenNebulaMessages>>;
 
