@@ -81,9 +81,16 @@ end
 ################################################################################
 # MAIN PROGRAM
 ################################################################################
-vms = all_vm_status(LXD)
+caching = true # TODO: Add avoid DB caching option via monitord
+
+vms = all_vm_status(KVM)
 
 return if vms.empty?
+
+if caching == false
+    puts "VM_STATE=YES\n#{vms}"
+    exit 0
+end
 
 time = Time.now.to_i
 vms = vms.split("VM=[\n")[1..-1]
