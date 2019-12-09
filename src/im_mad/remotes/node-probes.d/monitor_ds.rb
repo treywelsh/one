@@ -18,13 +18,46 @@
 
 require 'yaml'
 require 'fileutils'
-require_relative '../../../lib/monitor_ds_common'
 
 yaml = YAML.load(STDIN.read).to_hash
 
 class DSMonitor
 
+    def initialize(probe_args)
+        @ds_location = probe_args[:ds_location]
+        @ds_location ||= '/var/lib/one/datastores'
+        FileUtils.mkdir_p @ds_location
+    end
+
+    def dss_metrics
+        puts location_metrics
+
+        Dir.chdir @ds_location
+
+        datastores = Dir.glob('*').select do |f|
+            File.directory?(f) && f.match(/^\d+$/)
+        end
+
+        datastores.each do |ds|
+            dir = "#{@ds_location}/#{ds}"
+
+            # Skip if datastore is not marked for local monitoring
+            mark = "#{dir}/.monitor"
+
+            next unless File.exist? mark
+
+            driver = File.read mark
+            driver ||= 'ssh'
+
+            tm_script = "#{__dir__}/../../../../tm/#{driver}/monitor_ds"
+            `#{tm_script} #{dir}` if File.exist? tm_script
+
+            puts usage(dir)
+        end
+    end
+
     def location_metrics
+        "DS_LOCATION_#{total(@ds_location).delete(' ')}\n"\
         "DS_LOCATION_#{used(@ds_location).delete(' ')}\n"\
         "DS_LOCATION_#{free(@ds_location).delete(' ')}"
     end
@@ -33,22 +66,35 @@ class DSMonitor
         string = <<EOT
 DS = [
   ID = #{ds_id},
+  #{total(ds_id)},
   #{used(ds_id)},
   #{free(ds_id)}
 ]
 EOT
-        puts string
+        string
+    end
 
-        # Skip if datastore is not marked for local monitoring
-        mark = "#{dir}/.monitor"
+    def used(dir)
+        "USED_MB = #{metric(dir, 3)}"
+    end
 
-        return unless File.exist? mark
+    def total(dir)
+        "TOTAL_MB = #{metric(dir, 2)}"
+    end
 
-        driver = File.read mark
-        driver ||= 'ssh'
+    def free(dir)
+        "FREE_MB = #{metric(dir, 4)}"
+    end
 
-        tm_script = "#{__dir__}/../../../../tm/#{driver}/monitor_ds"
-        `#{tm_script} #{dir}` if File.exist? tm_script
+    private
+
+    def metric(dir, column)
+        metric =    `df -B1M -P #{dir} 2>/dev/null | tail -n 1 | \
+                     awk '{print $#{column}}'`.chomp
+
+        return 0 if metric.empty?
+
+        metric
     end
 
 end
