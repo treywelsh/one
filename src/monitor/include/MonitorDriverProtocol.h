@@ -14,32 +14,29 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_DRIVER_MANAGER_H_
-#define MONITOR_DRIVER_MANAGER_H_
+#ifndef MONITOR_DRIVER_PROTOCOL_H_
+#define MONITOR_DRIVER_PROTOCOL_H_
 
-#include "DriverManager.h"
 #include "MonitorDriverMessages.h"
-#include "HostBase.h"
 
-class MonitorDriverManager : public DriverManager<MonitorDriverMessages>
+class HostMonitorManager;
+
+struct MonitorDriverProtocol
 {
 public:
-    explicit MonitorDriverManager(
-            const string& mad_location)
-        : DriverManager(mad_location)
-    {
-    }
+    using message_t = std::unique_ptr<Message<MonitorDriverMessages>>;
 
-    /**
-     *  Start monitoring agent
-     */
-    int start_monitor(HostBase* host, bool update_remotes);
+    static void _undefined(message_t msg);
 
-    /**
-     *  Start monitoring agent
-     */
-    int stop_monitor(int hid, const string& host_name, const string& im_mad);
+    static void _monitor_vm(message_t msg);
 
+    static void _monitor_host(message_t msg);
+
+    static void _system_host(message_t msg);
+
+    static void _state_vm(message_t msg);
+
+    static HostMonitorManager * hm;
 };
 
-#endif // MONITOR_DRIVER_MANAGER_H_
+#endif // MONITOR_DRIVER_H_

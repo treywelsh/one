@@ -33,6 +33,7 @@ void Monitor::start()
 {
     // Configuration File
     config = new MonitorConfigTemplate(get_defaults_location());
+
     if (config->load_configuration() != 0)
     {
         throw runtime_error("Error reading configuration file.");
@@ -40,7 +41,7 @@ void Monitor::start()
 
     // Log system
     NebulaLog::LogType log_system = get_log_system(NebulaLog::STD);
-    Log::MessageType clevel = get_debug_level(Log::WARNING);
+    Log::MessageType clevel       = get_debug_level(Log::WARNING);
 
     if (log_system != NebulaLog::UNDEFINED)
     {
@@ -56,8 +57,7 @@ void Monitor::start()
         throw runtime_error("Unknown LOG_SYSTEM.");
     }
 
-    NebulaLog::log("MON", Log::INFO, "Init Monitor Log system");
-
+    NebulaLog::info("MON", "Init Monitor Log system");
 
     ostringstream oss;
     oss << "Starting Monitor Daemon" << endl;
@@ -67,7 +67,7 @@ void Monitor::start()
     oss << *config;
     oss << "----------------------------------------";
 
-    NebulaLog::log("MON", Log::INFO, oss);
+    NebulaLog::info("MON", oss.str());
 
     // -----------------------------------------------------------
     // XML-RPC Client
@@ -137,7 +137,7 @@ void Monitor::start()
     // int machines_limit = 100;
     // config->get("MAX_VM", machines_limit);
 
-    hpool.reset(new HostRPCPool(sqlDB.get()));
+    _hpool.reset(new HostRPCPool(sqlDB.get()));
     vmpool.reset(new VMRPCPool(sqlDB.get()));
 
     // Close stds in drivers
@@ -154,17 +154,20 @@ void Monitor::start()
 
     config->get("IM_MAD", drivers_conf);
 
-    dm.reset(new MonitorDriverManager(get_mad_location()));
+    hm.reset(new HostMonitorManager(*this));
 
-    if (dm->load_drivers(drivers_conf) != 0)
+    if (hm->load_monitor_drivers(drivers_conf) != 0)
     {
-        NebulaLog::log("MON", Log::ERROR, "Unable to load drivers configuration");
+        NebulaLog::error("MON", "Unable to load monitor drivers");
         return;
     }
+
+    MonitorDriverProtocol::hm = hm.get();
 
     // -----------------------------------------------------------
     // UDP action listener
     // -----------------------------------------------------------
+    /*
     std::string error;
     std::string address = "0.0.0.0";
     unsigned int port = 4124;
@@ -179,24 +182,22 @@ void Monitor::start()
     }
 
     udp_stream.reset(new udp_streamer_t(address, port));
+    */
 
-    MonitorDriver monitor(dm.get(), udp_stream.get(), hpool.get(), vmpool.get());
 
-    if (dm->start() < 0)
+    if (hm->start() == -1)
     {
-        NebulaLog::log("MON", Log::ERROR, "Unable to start DriverManager, exiting");
+        NebulaLog::log("MON", Log::ERROR, "Unable to start drivers, exiting");
         return;
     }
 
+    /*
     if (udp_stream->action_loop(threads, error) != 0)
     {
         NebulaLog::error("MON", "Unable to init UDP action listener: " + error);
         return;
     }
-
-    monitor.start();   // Blocking call
-
-    dm->stop();
+    */
 
     xmlCleanupParser();
 

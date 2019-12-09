@@ -22,7 +22,7 @@
 #include "NebulaLog.h"
 #include <string>
 
-template<typename E>
+template<typename E, typename D>
 class DriverManager
 {
 public:
@@ -35,7 +35,7 @@ public:
 
     int load_drivers(const vector<const VectorAttribute*>& mads_config);
 
-    Driver<E>* get_driver(const std::string& name) const;
+    D * get_driver(const std::string& name) const;
 
     /**
      *  Register an action for a given message type. The action is registered
@@ -55,7 +55,7 @@ public:
     void stop();
 
 private:
-    std::map<std::string, std::unique_ptr<Driver<E>>> drivers;
+    std::map<std::string, std::unique_ptr<D>> drivers;
 
     string mad_location;
 };
@@ -63,8 +63,8 @@ private:
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-template<typename E>
-int DriverManager<E>::load_drivers(const vector<const VectorAttribute*>& mads_config)
+template<typename E, typename D>
+int DriverManager<E, D>::load_drivers(const vector<const VectorAttribute*>& mads_config)
 {
     NebulaLog::info("DrM", "Loading drivers.");
 
@@ -96,7 +96,7 @@ int DriverManager<E>::load_drivers(const vector<const VectorAttribute*>& mads_co
             return -1;
         }
 
-        auto rc = drivers.insert({name, std::unique_ptr<Driver<E>>(new Driver<E>(exec, args, threads))});
+        auto rc = drivers.insert({name, std::unique_ptr<D>(new D(exec, args, threads))});
 
         if (rc.second)
         {
@@ -115,8 +115,8 @@ int DriverManager<E>::load_drivers(const vector<const VectorAttribute*>& mads_co
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-template<typename E>
-Driver<E>* DriverManager<E>::get_driver(const std::string& name) const
+template<typename E, typename D>
+D * DriverManager<E, D>::get_driver(const std::string& name) const
 {
     auto driver = drivers.find(name);
 
@@ -131,8 +131,8 @@ Driver<E>* DriverManager<E>::get_driver(const std::string& name) const
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-template<typename E>
-void DriverManager<E>::register_action(E t,
+template<typename E, typename D>
+void DriverManager<E, D>::register_action(E t,
     std::function<void(std::unique_ptr<Message<E>>)> a)
 {
     for (auto& driver : drivers)
@@ -144,8 +144,8 @@ void DriverManager<E>::register_action(E t,
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-template<typename E>
-int DriverManager<E>::start()
+template<typename E, typename D>
+int DriverManager<E, D>::start()
 {
     std::string error;
     for (auto& driver : drivers)
@@ -163,8 +163,8 @@ int DriverManager<E>::start()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-template<typename E>
-void DriverManager<E>::stop()
+template<typename E, typename D>
+void DriverManager<E, D>::stop()
 {
     for (auto& driver : drivers)
     {

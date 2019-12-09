@@ -163,7 +163,6 @@ public:
     // -----------------------------------------------------------------------
     // Configuration attributes (read from oned.conf)
     // -----------------------------------------------------------------------
-
     /**
      *  Gets a configuration attribute for oned
      *    @param name of the attribute
@@ -233,7 +232,6 @@ protected:
         nebula_service = nullptr;
     };
 
-protected:
     NebulaTemplate* config;
 
 private:

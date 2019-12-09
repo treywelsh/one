@@ -22,8 +22,8 @@
 #include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
-#include "MonitorDriverManager.h"
 #include "MonitorDriverMessages.h"
+#include "HostMonitorManager.h"
 
 class Monitor : public NebulaService
 {
@@ -38,16 +38,21 @@ public:
      */
     void thread_execute();
 
+    HostRPCPool * hpool() const
+    {
+        return _hpool.get();
+    }
+
 private:
     // ---------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------
-    std::unique_ptr<HostRPCPool> hpool;
+    std::unique_ptr<HostRPCPool> _hpool;
     std::unique_ptr<VMRPCPool>   vmpool;
 
     std::unique_ptr<SqlDB> sqlDB;
 
-    std::unique_ptr<MonitorDriverManager> dm;
+    std::unique_ptr<HostMonitorManager> hm;
 
     /**
      *  Stream receiving UDP data from monitor agents.

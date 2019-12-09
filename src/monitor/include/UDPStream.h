@@ -46,6 +46,8 @@ public:
     {
     }
 
+    virtual ~UDPStream() = default;
+
     /**
      *  This functions initializes the UDP socket for the stream. It must be
      *  called once before using the streamer

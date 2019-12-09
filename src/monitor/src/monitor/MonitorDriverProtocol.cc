@@ -14,58 +14,67 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#include "MonitorDriverManager.h"
+#include "MonitorDriverProtocol.h"
 
-using namespace std;
+#include "NebulaLog.h"
+#include "HostMonitorManager.h"
+
+HostMonitorManager * MonitorDriverProtocol::hm = nullptr;
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int MonitorDriverManager::start_monitor(HostBase* host, bool update_remotes)
+void MonitorDriverProtocol::_undefined(message_t msg)
 {
-    NebulaLog::debug("DrM", "Monitoring host: " + to_string(host->oid()) + ":" + host->name());
-
-    auto driver = get_driver(host->im_mad());
-
-    if (!driver)
-    {
-        NebulaLog::error("DrM", "Could not find information driver " + host->im_mad());
-
-        //host->set_error();
-
-        return -1;
-    }
-
-    // host->set_monitoring_state(); todo ??
-
-    // Nebula::instance().get_ds_location(dsloc); todo ?? Not needed for kvm push probe
-
-    // driver->monitor(host->oid(), host->name(), "", update_remotes);
-    ostringstream oss;
-    oss << "MONITOR " << host->oid() << " " << host->name() << " " << "not_defined" << " " << update_remotes << endl;
-    driver->write(oss.str());
-
-    return 0;
+    NebulaLog::info("MDP", "Received UNDEFINED msg: " + msg->payload());
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int MonitorDriverManager::stop_monitor(int hid, const string& host_name, const string& im_mad)
+ void MonitorDriverProtocol::_monitor_vm(message_t msg)
 {
-    NebulaLog::debug("DrM", "Stop monitoring host: " + to_string(hid) + ":" + host_name);
 
-    auto driver = get_driver(im_mad);
+}
 
-    if (!driver)
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+ void MonitorDriverProtocol::_monitor_host(message_t msg)
+{
+    NebulaLog::ddebug("MDP", "Received monitoring for host: " +
+            to_string(msg->oid()));
+
+    std::string msg_str = msg->payload();
+    char * error_msg;
+
+    Template tmpl;
+    int rc = tmpl.parse(msg_str, &error_msg);
+
+    if (rc != 0)
     {
-        NebulaLog::error("DrM", "Could not find information driver " + im_mad);
-        return -1;
+        NebulaLog::error("MDP", string("Error parsing monitoring template: ")
+                + error_msg);
+
+        free(error_msg);
+        return;
     }
 
-    ostringstream oss;
-    oss << "STOPMONITOR " << hid << " " << host_name << " " << endl;
-    driver->write(oss.str());
-
-    return 0;
+   hm->monitor_host(msg->oid(), tmpl);
 }
+
+ void MonitorDriverProtocol::_system_host(message_t msg)
+{
+
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+ void MonitorDriverProtocol::_state_vm(message_t msg)
+{
+
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */

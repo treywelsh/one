@@ -140,6 +140,7 @@ protected:
      */
     Client* client;
 
+    // TODO Thread safety
     /**
      * Hash map contains the suitable [id, object] pairs.
      */
