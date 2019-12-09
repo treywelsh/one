@@ -28,13 +28,13 @@ class DB
     # Returns the VM status that changed compared to the DB info
     def new_status(vms, timestamp = @time)
         new_data = ''
-        @real_ids = []
+        real_ids = []
 
         vms.each do |vm|
             id = vm[/ID=[0-9-]+/].split('=').last.to_i
-            status = vm[/STATUS="\S"?/].split('=').last
+            status = vm[/STATE="\S"?/].split('=').last
 
-            @real_ids << id
+            real_ids << id
 
             begin
                 vminfo = get(id)
@@ -53,15 +53,16 @@ class DB
             end
         end
 
-        clean_deleted
+        missing_vms = missing_alot(real_ids)
+        new_data << report_missing(missing_vms)
 
         new_data
     end
 
     # Updates the status of an existing VM entry
-    def update(id, status, time = @time, hypervisor = @hypervisor)
+    def update(id, status, time = @time)
         @dataset.where(:id => id).update(:status => status,
-            :timestamp => time, :hypervisor => hypervisor)
+            :timestamp => time)
     end
 
     # Adds a new full VM entry
@@ -75,20 +76,46 @@ class DB
         @dataset.where(condition).delete
     end
 
-    # Returns a VM status hash
+    # Returns a VM information hash
     def get(id)
         @dataset.first(:id => id)
     end
 
     private
 
-    def clean_deleted
-        dead_vm_ids = @stored_ids - @real_ids
+    # Returns the satus data string of the MISSING VMs
+    def report_missing(vms)
+        string = ''
 
-        dead_vm_ids.each {|id| delete(:id => id) }
+        vms.each do |vm|
+            string = "VM=[\n"
+            string <<  "  ID=#{vm[:id]},\n"
+            string <<  "  DEPLOY_ID=#{vm[:did]},\n"
+            string << %(  STATE="#{vm[:status]}" ]\n)
+        end
+
+        string
     end
 
-    # TODO: Maybe configure via monitord ?
+    # Returns the vms that have been missing too_much
+    def missing_alot(real_ids)
+        missing = []
+
+        missing_now = @stored_ids - real_ids
+
+        missing_now.each do |id|
+            vm = get(id)
+
+            next unless @time - vm[:timestamp] >= @config[:time_missing]
+
+            update(id, 'MISSING')
+
+            missing << get(id)
+        end
+
+        missing
+    end
+
     # Deletes VM entries prior to the current time
     def clean_old
         obsolete = @config[:obsolete] * 60 # conf in minutes
