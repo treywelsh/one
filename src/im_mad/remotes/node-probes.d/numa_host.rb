@@ -21,30 +21,55 @@ require_relative '../../../lib/numa_common'
 module NUMA
 
     def self.node_to_template(node, nid)
-        node_s = ''
+        huge = []
+        cores = {}
+        memory = {}
 
         node.each do |k, v|
             case k
             when 'hugepages'
                 v.each do |h|
-                    node_s << "HUGEPAGE = [ NODE_ID = \"#{nid}\","
-                    node_s << " SIZE = \"#{h['size']}\","
-                    node_s << " PAGES = \"#{h['nr']}\" ]\n"
+                    huge << { :size => h['size'], :pages => h['nr'] }
                 end
             when 'cores'
                 v.each do |c|
-                    node_s << "CORE = [ NODE_ID = \"#{nid}\","
-                    node_s << " ID = \"#{c['id']}\","
-                    node_s << " CPUS = \"#{c['cpus'].join(',')}\" ]\n"
+                    tag = (c['id']).to_s
+
+                    cores[tag] = [] unless cores[tag]
+
+                    cores[tag] << c['cpus'].join(',')
                 end
             when 'memory'
-                node_s << "MEMORY_NODE = [ NODE_ID = \"#{nid}\","
-                node_s << " TOTAL = \"#{v['total']}\","
-                node_s << " DISTANCE = \"#{v['distance']}\" ]\n"
+                memory.merge!(:distance => v['distance'], :total => v['total'])
             end
         end
 
-        node_s
+        builder = Nokogiri::XML::Builder.new do |xml|
+            xml.NODE {
+                xml.ID nid
+
+                huge.each do |h|
+                    xml.HUGEPAGE {
+                        xml.SIZE h[:size]
+                        xml.PAGES h[:pages]
+                    }
+                end
+
+                cores.each do |id, cpus|
+                    xml.CORE {
+                        xml.ID id
+                        xml.CPUS cpus.join(',')
+                    }
+                end
+
+                xml.MEMORY {
+                    xml.DISTANCE memory[:distance]
+                    xml.TOTAL memory[:total]
+                }
+            }
+        end
+
+        builder.doc.root.to_xml
     end
 
     # --------------------------------------------------------------------------
@@ -105,8 +130,10 @@ Dir.foreach(NUMA::NODE_PATH) do |node|
     NUMA.memory(nodes, node_id)
 end
 
-nodes_s = ''
+nodes_xml = Nokogiri::XML('<NUMA_NODES/>')
 
-nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
+nodes.each do |i, v|
+    nodes_xml.at('NUMA_NODES').add_child(NUMA.node_to_template(v, i))
+end
 
-puts nodes_s
+puts nodes_xml.root.to_xml

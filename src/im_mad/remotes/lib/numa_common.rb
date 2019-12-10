@@ -23,6 +23,9 @@
 #   - https://www.kernel.org/doc/Documentation/cputopology.txt
 #
 #-------------------------------------------------------------------------------
+
+require 'nokogiri'
+
 module NUMA
 
     NODE_PATH = '/sys/bus/node/devices/'

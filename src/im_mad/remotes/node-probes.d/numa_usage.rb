@@ -21,24 +21,39 @@ require_relative '../../../lib/numa_common'
 module NUMA
 
     def self.node_to_template(node, nid)
-        node_s = ''
+        huge = []
+        memory = {}
 
         node.each do |k, v|
             case k
             when 'hugepages'
                 v.each do |h|
-                    node_s << "HUGEPAGE = [ NODE_ID = \"#{nid}\","
-                    node_s << " SIZE = \"#{h['size']}\","
-                    node_s << " FREE = \"#{h['free']}\" ]\n"
+                    huge << { :size => h['size'], :free => h['free'] }
                 end
             when 'memory'
-                node_s << "MEMORY_NODE = [ NODE_ID = \"#{nid}\","
-                node_s << " FREE = \"#{v['free']}\","
-                node_s << " USED = \"#{v['used']}\" ]\n"
+                memory.merge!(:free => v['free'], :used => v['used'])
             end
         end
 
-        node_s
+        builder = Nokogiri::XML::Builder.new do |xml|
+            xml.NODE {
+                xml.ID nid
+
+                huge.each do |h|
+                    xml.HUGEPAGE {
+                        xml.SIZE h[:size]
+                        xml.FREE h[:free]
+                    }
+                end
+
+                xml.MEMORY {
+                    xml.FREE memory[:free]
+                    xml.USED memory[:used]
+                }
+            }
+        end
+
+        builder.doc.root.to_xml
     end
 
 end
@@ -59,8 +74,16 @@ Dir.foreach(NUMA::NODE_PATH) do |node|
     NUMA.memory(nodes, node_id)
 end
 
-nodes_s = ''
+# nodes_s = ''
 
-nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
+# nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
 
-puts nodes_s
+# puts nodes_s
+
+nodes_xml = Nokogiri::XML('<NUMA_NODES/>')
+
+nodes.each do |i, v|
+    nodes_xml.at('NUMA_NODES').add_child(NUMA.node_to_template(v, i))
+end
+
+puts nodes_xml.root.to_xml
