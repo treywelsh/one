@@ -28,6 +28,7 @@ module NUMA
             when 'hugepages'
                 v.each do |h|
                     node_s << "HUGEPAGE = [ NODE_ID = \"#{nid}\","
+                    node_s << " SIZE = \"#{h['size']}\","
                     node_s << " FREE = \"#{h['free']}\" ]\n"
                 end
             when 'memory'
