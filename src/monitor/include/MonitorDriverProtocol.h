@@ -14,32 +14,68 @@
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MONITOR_DRIVER_MANAGER_H_
-#define MONITOR_DRIVER_MANAGER_H_
+#ifndef MONITOR_DRIVER_PROTOCOL_H_
+#define MONITOR_DRIVER_PROTOCOL_H_
 
-#include "DriverManager.h"
+#include "NebulaLog.h"
 #include "MonitorDriverMessages.h"
-#include "HostBase.h"
 
-class MonitorDriverManager : public DriverManager<MonitorDriverMessages>
+#include "HostMonitorManager.h"
+
+struct MonitorDriverProtocol
 {
 public:
-    explicit MonitorDriverManager(
-            const string& mad_location)
-        : DriverManager(mad_location)
+    using message_t = std::unique_ptr<Message<MonitorDriverMessages>>;
+
+    MonitorDriverProtocol();
+
+    // Monitor driver message handlers
+    static void _undefined(message_t msg)
     {
+        NebulaLog::info("MDP", "Received UNDEFINED msg: " + msg->payload());
     }
 
-    /**
-     *  Start monitoring agent
-     */
-    int start_monitor(HostBase* host, bool update_remotes);
+    static void _monitor_vm(message_t msg)
+    {
 
-    /**
-     *  Start monitoring agent
-     */
-    int stop_monitor(int hid, const string& host_name, const string& im_mad);
+    }
 
+    static void _monitor_host(message_t msg)
+    {
+        NebulaLog::ddebug("MDP", "Received monitoring for host: " +
+                to_string(msg->oid()));
+
+        std::string msg_str = msg->payload();
+        char * error_msg;
+
+        Template tmpl;
+        int rc = tmpl.parse(msg_str, &error_msg);
+
+        if (rc != 0)
+        {
+            NebulaLog::error("MDP", string("Error parsing monitoring template: ")
+                    + error_msg);
+
+            free(error_msg);
+            return;
+        }
+
+       hm->monitor_host(msg->oid(), tmpl);
+    }
+
+    static void _system_host(message_t msg)
+    {
+
+    }
+
+    static void _state_vm(message_t msg)
+    {
+
+    }
+
+private:
+
+    static HostMonitorManager * hm;
 };
 
-#endif // MONITOR_DRIVER_MANAGER_H_
+#endif // MONITOR_DRIVER_H_

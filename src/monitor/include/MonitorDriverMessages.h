@@ -32,6 +32,8 @@ enum class MonitorDriverMessages : unsigned short int
     MONITOR_HOST = 4,
     SYSTEM_HOST  = 5,
     STATE_VM     = 6,
+    START_MONITOR= 7,
+    STOP_MONITOR = 8
 };
 
 typedef Driver<MonitorDriverMessages> driver_t;

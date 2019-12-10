@@ -17,72 +17,57 @@
 #ifndef MONITOR_DRIVER_H_
 #define MONITOR_DRIVER_H_
 
-#include <thread>
-
-#include "HostRPCPool.h"
-#include "VMRPCPool.h"
-#include "MonitorDriverManager.h"
+#include "Driver.h"
+#include "Message.h"
 #include "MonitorDriverMessages.h"
-#include "OpenNebulaDriver.h"
-#include "OpenNebulaMessages.h"
+#include "MonitorDriverProtocol.h"
 
-class MonitorDriver : public OpenNebulaDriver
+
+class MonitorDriver : public Driver<MonitorDriverMessages>
 {
 public:
-    MonitorDriver(MonitorDriverManager* mdm,
-                  udp_streamer_t*       udp,
-                  HostRPCPool*          host_pool,
-                  VMRPCPool*            vm_pool);
+    using message_t = Message<MonitorDriverMessages>;
 
-    void start();
+    MonitorDriver(const std::string& c, const std::string& a, int ct):
+        Driver<MonitorDriverMessages>(c, a, ct)
+    {
+        register_action(MonitorDriverMessages::UNDEFINED,
+                &MonitorDriverProtocol::_undefined);
 
-protected:
-    /**
-     *  Register callbacks for messages
-     */
-    void register_messages();
+        register_action(MonitorDriverMessages::MONITOR_VM,
+                &MonitorDriverProtocol::_monitor_vm);
 
-    /**
-     *  The main execution loop, handles the monitoring logic
-     */
-    void thread_execute();
+        register_action(MonitorDriverMessages::MONITOR_HOST,
+                &MonitorDriverProtocol::_monitor_host);
 
-    /**
-     *  Reads data from oned
-     *   @return false if the OpenNebula service is not available
-     **/
-    bool pull_from_oned();
+        register_action(MonitorDriverMessages::SYSTEM_HOST,
+                &MonitorDriverProtocol::_system_host);
 
-    // Oned message handlers
-    static void _undefined(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-    void _update_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-    void _del_host(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-    void _start_monitor(std::unique_ptr<Message<OpenNebulaMessages>> msg);
-    void _stop_monitor(std::unique_ptr<Message<OpenNebulaMessages>> msg);
+        register_action(MonitorDriverMessages::STATE_VM,
+                &MonitorDriverProtocol::_state_vm);
+    };
 
-    // Monitor driver message handlers
-    static void _monitor_undefined(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void _monitor_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void _monitor_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void _system_host(std::unique_ptr<Message<MonitorDriverMessages>> msg);
-    void _state_vm(std::unique_ptr<Message<MonitorDriverMessages>> msg);
+    void start_monitor(int oid, const std::string& host_xml)
+    {
+        message_t msg;
 
-private:
-    std::thread                  monitor_thread;
-    std::atomic<bool>            terminate{false};
+        msg.type(MonitorDriverMessages::START_MONITOR);
+        msg.oid(oid);
+        msg.payload(host_xml);
 
-    MonitorDriverManager* dm;
+        write(msg);
+    }
 
-    /**
-     *  Stream receiving UDP data from monitor agents.
-     */
-    udp_streamer_t* udp_stream;
+    void stop_monitor(int oid, const std::string& host_xml)
+    {
+        message_t msg;
 
-    // ---------------------------------------------------------------
-    // Pools
-    // ---------------------------------------------------------------
-    HostRPCPool* hpool;
-    VMRPCPool*   vmpool;
+        msg.type(MonitorDriverMessages::STOP_MONITOR);
+        msg.oid(oid);
+        msg.payload(host_xml);
+
+        write(msg);
+    }
 };
 
 #endif // MONITOR_DRIVER_H_
