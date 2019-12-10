@@ -25,7 +25,7 @@ class UDPMonitorDriver : public UDPStream<MonitorDriverMessages>
 public:
 
     UDPMonitorDriver(const std::string& a, unsigned int p)
-        :udp_streamer_t(a, p)
+        :UDPStream<MonitorDriverMessages>(a, p)
     {
         register_action(MonitorDriverMessages::UNDEFINED,
                 &MonitorDriverProtocol::_undefined);
@@ -43,7 +43,7 @@ public:
                 &MonitorDriverProtocol::_state_vm);
     };
 
-   ~UDPMonitorDriver() = default; 
+   ~UDPMonitorDriver() = default;
 };
 
 #endif // MONITOR_DRIVER_H_

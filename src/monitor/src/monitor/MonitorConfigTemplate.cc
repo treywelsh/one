@@ -16,28 +16,39 @@
 
 #include "MonitorConfigTemplate.h"
 
+/* -------------------------------------------------------------------------- */
+/*  Configuration Defaults                                                    */
+/* -------------------------------------------------------------------------- */
 void MonitorConfigTemplate::set_conf_default()
 {
-    //SingleAttribute *   attribute;
-    VectorAttribute *   vattribute;
-    string              value;
-    map<string,string>  vvalue;
-
+    SingleAttribute * sa;
+    VectorAttribute * va;
 /*
-#*******************************************************************************
-# Daemon configuration attributes
-#-------------------------------------------------------------------------------
-#  LOG
-#  todo add more configuration attributes
-#-------------------------------------------------------------------------------
-*/
-    // LOG CONFIGURATION
-    vvalue.clear();
-    vvalue.insert(make_pair("SYSTEM", "file"));
-    vvalue.insert(make_pair("DEBUG_LEVEL", "3"));
+ MESSAGE_SIZE
+ XMLRPC_TIMEOUT
+ ONE_XMLRPC
+ LOG
+ DB
+ UDP_LISTENER
+ */
+    sa = new SingleAttribute("MESSAGE_SIZE", "1073741824");
+    conf_default.insert(make_pair(sa->name(), sa));
 
-    vattribute = new VectorAttribute("LOG", vvalue);
-    conf_default.insert(make_pair(vattribute->name(), vattribute));
+    sa = new SingleAttribute("XMLRPC_TIMEOU", "60");
+    conf_default.insert(make_pair(sa->name(), sa));
+
+    sa = new SingleAttribute("ONE_XMLRPC", "http://localhost:2633/RPC2");
+    conf_default.insert(make_pair(sa->name(), sa));
+
+    va = new VectorAttribute("LOG", {{"SYSTEM", "FILE"}, {"DEBUG_LEVEL", "3"}});
+    conf_default.insert(make_pair(va->name(), va));
+
+    va = new VectorAttribute("DB", {{"BACKEND", "sqlite"}});
+    conf_default.insert(make_pair(va->name(), va));
+
+    va = new VectorAttribute("UDP_LISTENER", {{"ADDRESS", "0.0.0.0"},
+            {"PORT", "4124"}, {"THREADS", "16"}});
+    conf_default.insert(make_pair(va->name(), va));
 }
 
 /* -------------------------------------------------------------------------- */

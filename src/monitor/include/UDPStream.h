@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include <vector>
+
 #include "StreamManager.h"
 
 /**
@@ -55,6 +57,19 @@ public:
      */
     int action_loop(int threads, std::string& error);
 
+    /**
+     *  Stops the listner threads and free resources
+     */
+    void stop()
+    {
+        close(_socket);
+
+        for(auto& th : listener_threads)
+        {
+            th.join();
+        }
+    }
+
 protected:
 
     int read_line(std::string& line) override;
@@ -65,6 +80,8 @@ private:
     std::string _address;
 
     short unsigned int _port;
+
+    std::vector<std::thread> listener_threads;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -118,7 +135,7 @@ int UDPStream<E>::action_loop(int threads, std::string& error)
 
     for (int i = 0 ; i < threads; ++i)
     {
-        std::thread action_thread([this]{
+        std::thread action_thread = thread([this]{
             while (true)
             {
                 std::string line;
@@ -141,7 +158,7 @@ int UDPStream<E>::action_loop(int threads, std::string& error)
             }
         });
 
-        action_thread.detach();
+        listener_threads.push_back(std::move(action_thread));
     }
 
     return 0;
@@ -159,9 +176,13 @@ int UDPStream<E>::read_line(std::string& line)
     struct sockaddr addr;
     socklen_t addr_size = sizeof(struct sockaddr);
 
-    size_t rc = recvfrom(_socket, buffer, MESSAGE_SIZE, 0, &addr, &addr_size);
+    ssize_t rc = recvfrom(_socket, buffer, MESSAGE_SIZE, 0, &addr, &addr_size);
 
-    if (rc > 0 && rc < MESSAGE_SIZE)
+    if ( rc == -1 )
+    {
+        return -1;
+    }
+    else if (rc > 0 && rc < MESSAGE_SIZE)
     {
         line.assign(buffer, rc);
     }

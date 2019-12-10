@@ -31,7 +31,9 @@ using namespace std;
 
 void Monitor::start()
 {
+    // -------------------------------------------------------------------------
     // Configuration File
+    // -------------------------------------------------------------------------
     config = new MonitorConfigTemplate(get_defaults_location());
 
     if (config->load_configuration() != 0)
@@ -69,35 +71,41 @@ void Monitor::start()
 
     NebulaLog::info("MON", oss.str());
 
-    // -----------------------------------------------------------
+    // -------------------------------------------------------------------------
     // XML-RPC Client
-    // -----------------------------------------------------------
-    {
-        string       one_xmlrpc;
-        long long    message_size;
-        unsigned int timeout;
+    // -------------------------------------------------------------------------
+    string       one_xmlrpc;
+    long long    message_size;
+    unsigned int timeout;
 
-        config->get("ONE_XMLRPC", one_xmlrpc);
-        config->get("MESSAGE_SIZE", message_size);
-        config->get("TIMEOUT", timeout);
+    config->get("ONE_XMLRPC", one_xmlrpc);
+    config->get("MESSAGE_SIZE", message_size);
+    config->get("TIMEOUT", timeout);
 
-        Client::initialize("", one_xmlrpc, message_size, timeout);
+    Client::initialize("", one_xmlrpc, message_size, timeout);
 
-        oss.str("");
+    oss.str("");
 
-        oss << "XML-RPC client using " << (Client::client())->get_message_size()
-            << " bytes for response buffer.\n";
+    oss << "XML-RPC client using " << (Client::client())->get_message_size()
+        << " bytes for response buffer.\n";
 
-        NebulaLog::log("MON", Log::INFO, oss);
-    }
+    NebulaLog::log("MON", Log::INFO, oss);
 
     xmlInitParser();
 
-    // -----------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Database
-    // -----------------------------------------------------------
+    // -------------------------------------------------------------------------
+    const VectorAttribute * _db = config->get("DB");
+
+    std::string db_backend = _db->vector_value("BACKEND");
+
+    if (db_backend == "sqlite")
     {
-        string db_backend_type = "sqlite";
+        sqlDB.reset(new SqliteDB(get_var_location() + "one.db"));
+    }
+    else
+    {
         string server;
         int    port;
         string user;
@@ -106,41 +114,27 @@ void Monitor::start()
         string encoding;
         int    connections;
 
-        const VectorAttribute * _db = config->get("DB");
+        _db->vector_value<string>("SERVER", server, "localhost");
+        _db->vector_value("PORT", port, 0);
+        _db->vector_value<string>("USER", user, "oneadmin");
+        _db->vector_value<string>("PASSWD", passwd, "oneadmin");
+        _db->vector_value<string>("DB_NAME", db_name, "opennebula");
+        _db->vector_value<string>("ENCODING", encoding, "");
+        _db->vector_value("CONNECTIONS", connections, 50);
 
-        if (_db != 0)
-        {
-            db_backend_type = _db->vector_value("BACKEND");
-
-            _db->vector_value<string>("SERVER", server, "localhost");
-            _db->vector_value("PORT", port, 0);
-            _db->vector_value<string>("USER", user, "oneadmin");
-            _db->vector_value<string>("PASSWD", passwd, "oneadmin");
-            _db->vector_value<string>("DB_NAME", db_name, "opennebula");
-            _db->vector_value<string>("ENCODING", encoding, "");
-            _db->vector_value("CONNECTIONS", connections, 50);
-        }
-
-        if (db_backend_type == "sqlite")
-        {
-            sqlDB.reset(new SqliteDB(get_var_location() + "one.db"));
-        }
-        else
-        {
-            sqlDB.reset(new MySqlDB(server, port, user, passwd, db_name, encoding, connections));
-        }
+        sqlDB.reset(new MySqlDB(server, port, user, passwd, db_name,
+                    encoding, connections));
     }
 
     // -------------------------------------------------------------------------
     // Pools
     // -------------------------------------------------------------------------
-    // int machines_limit = 100;
-    // config->get("MAX_VM", machines_limit);
-
     _hpool.reset(new HostRPCPool(sqlDB.get()));
     vmpool.reset(new VMRPCPool(sqlDB.get()));
 
+    // -------------------------------------------------------------------------
     // Close stds in drivers
+    // -------------------------------------------------------------------------
     fcntl(0, F_SETFD, FD_CLOEXEC);
     fcntl(1, F_SETFD, FD_CLOEXEC);
     fcntl(2, F_SETFD, FD_CLOEXEC);
@@ -150,11 +144,24 @@ void Monitor::start()
     // -------------------------------------------------------------------------
     // Drivers
     // -------------------------------------------------------------------------
+    std::string addr;
+    unsigned int port;
+    unsigned int threads;
+
+    auto udp_conf = config->get("UDP_LISTENER");
+
+    udp_conf->vector_value("ADDRESS", addr);
+
+    udp_conf->vector_value("PORT", port);
+
+    udp_conf->vector_value("THREADS", threads);
+
     vector<const VectorAttribute *> drivers_conf;
 
     config->get("IM_MAD", drivers_conf);
 
-    hm.reset(new HostMonitorManager(*this));
+    hm.reset(new HostMonitorManager(_hpool.get(), addr, port, threads,
+                get_mad_location()));
 
     if (hm->load_monitor_drivers(drivers_conf) != 0)
     {
@@ -162,42 +169,18 @@ void Monitor::start()
         return;
     }
 
+    // -------------------------------------------------------------------------
+    // Start Drivers
+    // -------------------------------------------------------------------------
+    std::string error;
+
     MonitorDriverProtocol::hm = hm.get();
 
-    // -----------------------------------------------------------
-    // UDP action listener
-    // -----------------------------------------------------------
-    /*
-    std::string error;
-    std::string address = "0.0.0.0";
-    unsigned int port = 4124;
-    unsigned int threads = 16;
-
-    auto udp_conf = config->get("UDP_LISTENER");
-    if (udp_conf)
+    if (hm->start(error) == -1)
     {
-        udp_conf->vector_value("ADDRESS", address, address);
-        udp_conf->vector_value("PORT", port, port);
-        udp_conf->vector_value("THREADS", threads, threads);
-    }
-
-    udp_stream.reset(new udp_streamer_t(address, port));
-    */
-
-
-    if (hm->start() == -1)
-    {
-        NebulaLog::log("MON", Log::ERROR, "Unable to start drivers, exiting");
+        NebulaLog::error("MON", "Error starting monitor drivers: " + error);
         return;
     }
-
-    /*
-    if (udp_stream->action_loop(threads, error) != 0)
-    {
-        NebulaLog::error("MON", "Unable to init UDP action listener: " + error);
-        return;
-    }
-    */
 
     xmlCleanupParser();
 

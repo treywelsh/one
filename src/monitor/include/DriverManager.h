@@ -47,7 +47,7 @@ public:
     /**
      *  Start all drivers
      */
-    int start();
+    int start(std::string& error);
 
     /**
      *  Stop all drivers
@@ -145,9 +145,8 @@ void DriverManager<E, D>::register_action(E t,
 /* -------------------------------------------------------------------------- */
 
 template<typename E, typename D>
-int DriverManager<E, D>::start()
+int DriverManager<E, D>::start(std::string& error)
 {
-    std::string error;
     for (auto& driver : drivers)
     {
         auto rc = driver.second->start(error);

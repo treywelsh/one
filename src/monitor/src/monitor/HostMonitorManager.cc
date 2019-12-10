@@ -13,39 +13,39 @@
 /* See the License for the specific language governing permissions and        */
 /* limitations under the License.                                             */
 /* -------------------------------------------------------------------------- */
-
-#include "HostMonitorManager.h"
-
 #include "NebulaLog.h"
+
+#include "HostRPCPool.h"
+#include "HostMonitorManager.h"
+#include "Monitor.h"
+
+#include "Driver.h"
+#include "DriverManager.h"
 #include "MonitorDriver.h"
 #include "UDPMonitorDriver.h"
 #include "OneMonitorDriver.h"
-#include "HostRPCPool.h"
-#include "Monitor.h"
+
+#include <condition_variable>
+#include <chrono>
 
 using namespace std;
 
-HostMonitorManager::HostMonitorManager(const Monitor& ns)
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+HostMonitorManager::HostMonitorManager(
+        HostRPCPool *      hp,
+        const std::string& addr,
+        unsigned int       port,
+        unsigned int       threads,
+        const std::string& driver_path)
+    : hpool(hp)
+    , udp_threads(threads)
+    , timer_period(30)
 {
-    hpool = ns.hpool();
-
-    oned_driver = new OneMonitorDriver(this);
-
-    udp_driver  = new UDPMonitorDriver("0.0.0.0", 4124);
-
-    driver_manager = new DriverManager<MonitorDriverMessages, MonitorDriver>(ns.get_mad_location());
-    /*
-     * TODO
- 
-    auto udp_conf = config->get("UDP_LISTENER");
-    if (udp_conf)
-    {
-        udp_conf->vector_value("ADDRESS", address, address);
-        udp_conf->vector_value("PORT", port, port);
-        udp_conf->vector_value("THREADS", threads, threads);
-    }
-    */
-
+    oned_driver    = new OneMonitorDriver(this);
+    udp_driver     = new UDPMonitorDriver(addr, port);
+    driver_manager = new driver_manager_t(driver_path);
 };
 
 HostMonitorManager::~HostMonitorManager()
@@ -58,20 +58,59 @@ HostMonitorManager::~HostMonitorManager()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int HostMonitorManager::load_monitor_drivers(const vector<const VectorAttribute*>& mads_config)
+int HostMonitorManager::load_monitor_drivers(
+        const vector<const VectorAttribute*>& mads_config)
 {
     return driver_manager->load_drivers(mads_config);
 }
 
-int HostMonitorManager::start()
+int HostMonitorManager::start(std::string& error)
 {
-    //TODO start timer thread
-    if ( driver_manager->start() != 0 )
+    condition_variable end_cv;
+    mutex end_mtx;
+    bool  end = false;
+
+    //Start Monitor drivers and associated listener threads
+    if ( driver_manager->start(error) != 0 )
     {
         return -1;
     }
 
+    //Start UDP listener threads
+    if ( udp_driver->action_loop(udp_threads, error) == -1 )
+    {
+        return -1;
+    }
+
+    //Start the timer action thread
+    thread timer_thr = thread([&, this]{
+        unique_lock<mutex> end_lck(end_mtx);
+
+        while(!end_cv.wait_for(end_lck, chrono::seconds(timer_period),
+                    [&](){return end;}))
+        {
+            timer_action();
+        }
+    });
+
+    //Wait for oned messages. FINALIZE will end the driver
     oned_driver->start_driver();
+
+    //End timer thread
+    {
+        lock_guard<mutex> end_lck(end_mtx);
+        end = true;
+    }
+
+    end_cv.notify_one();
+
+    timer_thr.join();
+
+    //End UDP listener threads
+    udp_driver->stop();
+
+    //End monitor drivers
+    driver_manager->stop();
 
     return 0;
 }
@@ -215,6 +254,24 @@ void HostMonitorManager::monitor_host(int oid, Template &tmpl)
         Host::state_to_str(state, Host::HostState::MONITORED);
 
         oned_driver->host_state(oid, state);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void HostMonitorManager::timer_action()
+{
+    static int mark = 0;
+    static int tics = timer_period;
+
+    mark += timer_period;
+    tics += timer_period;
+
+    if ( mark >= 600 )
+    {
+        NebulaLog::info("HMM", "--Mark--");
+        mark = 0;
     }
 }
 

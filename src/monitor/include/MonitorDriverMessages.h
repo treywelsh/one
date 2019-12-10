@@ -17,7 +17,6 @@
 #ifndef MONITOR_DRIVER_MESSAGES_H_
 #define MONITOR_DRIVER_MESSAGES_H_
 
-#include "Driver.h"
 #include "UDPStream.h"
 
 /**
@@ -35,9 +34,5 @@ enum class MonitorDriverMessages : unsigned short int
     START_MONITOR= 7,
     STOP_MONITOR = 8
 };
-
-typedef Driver<MonitorDriverMessages> driver_t;
-
-typedef UDPStream<MonitorDriverMessages> udp_streamer_t;
 
 #endif /*MONITOR_DRIVER_MESSAGES_H_*/

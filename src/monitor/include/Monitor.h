@@ -38,11 +38,6 @@ public:
      */
     void thread_execute();
 
-    HostRPCPool * hpool() const
-    {
-        return _hpool.get();
-    }
-
 private:
     // ---------------------------------------------------------------
     // Pools
@@ -53,11 +48,6 @@ private:
     std::unique_ptr<SqlDB> sqlDB;
 
     std::unique_ptr<HostMonitorManager> hm;
-
-    /**
-     *  Stream receiving UDP data from monitor agents.
-     */
-    std::unique_ptr<udp_streamer_t> udp_stream;
 };
 
 #endif // MONITOR_H_

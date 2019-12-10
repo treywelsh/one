@@ -29,15 +29,18 @@
 
 int InformationManager::start()
 {
+    std::string error;
+
     using namespace std::placeholders; // for _1
 
     register_action(OpenNebulaMessages::UNDEFINED, bind(&InformationManager::_undefined, _1));
     register_action(OpenNebulaMessages::HOST_STATE, bind(&InformationManager::_host_state, this, _1));
 
-    int rc = DriverManager::start();
+    int rc = DriverManager::start(error);
 
     if ( rc != 0 )
     {
+        NebulaLog::error("InM", "Error starting Information Manager: " + error);
         return -1;
     }
 

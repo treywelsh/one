@@ -17,10 +17,14 @@
 #ifndef HOST_MONITOR_MANAGER_H_
 #define HOST_MONITOR_MANAGER_H_
 
-#include "DriverManager.h"
 #include "MonitorDriverMessages.h"
+#include <vector>
 
 class Template;
+class VectorAttribute;
+
+template<typename E, typename D>
+class DriverManager;
 
 class HostRPCPool;
 
@@ -37,7 +41,8 @@ class Monitor;
 class HostMonitorManager
 {
 public:
-    HostMonitorManager(const Monitor& monitor_service);
+    HostMonitorManager(HostRPCPool *hp, const std::string& addr, unsigned int port,
+            unsigned int threads, const std::string& driver_path);
 
     ~HostMonitorManager();
 
@@ -47,12 +52,12 @@ public:
     /**
      *
      */
-    int load_monitor_drivers(const vector<const VectorAttribute*>& mads_config);
+    int load_monitor_drivers(const std::vector<const VectorAttribute*>& config);
 
     /**
      *  Start the monitor manager drivers to process events
      */
-    int start();
+    int start(std::string& error);
 
     //--------------------------------------------------------------------------
     //  Management / Monitor Interface
@@ -90,14 +95,25 @@ public:
      */
     void monitor_host(int oid, Template &tmpl);
 
+    /**
+     *  This function is executed periodically to update host monitor status
+     */
+    void timer_action();
+
 private:
-    DriverManager<MonitorDriverMessages, MonitorDriver> * driver_manager;
+    using driver_manager_t = DriverManager<MonitorDriverMessages, MonitorDriver>;
 
-    OneMonitorDriver * oned_driver;
+    driver_manager_t* driver_manager;
 
-    UDPMonitorDriver * udp_driver;
+    OneMonitorDriver* oned_driver;
+
+    UDPMonitorDriver* udp_driver;
 
     HostRPCPool* hpool;
+
+    unsigned int udp_threads;
+
+    int timer_period;
 };
 
 #endif //HOST_MONITOR_MANAGER_H_
