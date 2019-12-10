@@ -154,17 +154,20 @@ void Monitor::start()
 
     config->get("IM_MAD", drivers_conf);
 
-    dm.reset(new MonitorDriverManager(get_mad_location()));
+    hm.reset(new HostMonitorManager(hpool.get(), get_mad_location()));
 
-    if (dm->load_drivers(drivers_conf) != 0)
+    if (hm->load_monitor_drivers(drivers_conf) != 0)
     {
-        NebulaLog::log("MON", Log::ERROR, "Unable to load drivers configuration");
+        NebulaLog::error("MON", "Unable to load monitor drivers");
         return;
     }
+
+    MonitorDriverProtocol::hm = hm.get();
 
     // -----------------------------------------------------------
     // UDP action listener
     // -----------------------------------------------------------
+    /*
     std::string error;
     std::string address = "0.0.0.0";
     unsigned int port = 4124;
@@ -179,24 +182,22 @@ void Monitor::start()
     }
 
     udp_stream.reset(new udp_streamer_t(address, port));
+    */
 
-    MonitorDriver monitor(dm.get(), udp_stream.get(), hpool.get(), vmpool.get());
 
-    if (dm->start() < 0)
+    if (hm->start() == -1)
     {
-        NebulaLog::log("MON", Log::ERROR, "Unable to start DriverManager, exiting");
+        NebulaLog::log("MON", Log::ERROR, "Unable to start drivers, exiting");
         return;
     }
 
+    /*
     if (udp_stream->action_loop(threads, error) != 0)
     {
         NebulaLog::error("MON", "Unable to init UDP action listener: " + error);
         return;
     }
-
-    monitor.start();   // Blocking call
-
-    dm->stop();
+    */
 
     xmlCleanupParser();
 

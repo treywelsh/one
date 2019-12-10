@@ -33,10 +33,41 @@ class Template;
 class HostMonitorManager
 {
 public:
-    HostMonitorManager(HostRPCPool * _hpool):oned_driver(this), hpool(_hpool){};
+    HostMonitorManager(HostRPCPool * _hpool, const std::string& mad_location)
+        :driver_manager(mad_location), oned_driver(this), hpool(_hpool){};
 
     ~HostMonitorManager() = default;
 
+    //--------------------------------------------------------------------------
+    //  Driver Interface
+    //--------------------------------------------------------------------------
+    /**
+     *
+     */
+    int load_monitor_drivers(const vector<const VectorAttribute*>& mads_config)
+    {
+        return driver_manager.load_drivers(mads_config);
+    }
+
+    /**
+     *  Start the monitor manager to process events
+     */
+    int start()
+    {
+        //TODO start timer thread
+        if ( driver_manager.start() != 0 )
+        {
+            return -1;
+        }
+
+        oned_driver.start_driver();
+
+        return 0;
+    }
+
+    //--------------------------------------------------------------------------
+    //  Management / Monitor Interface
+    //--------------------------------------------------------------------------
     /**
      *  Start the monitor agent/ or active monitor the host
      *   @param oid the host id

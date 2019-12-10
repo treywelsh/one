@@ -22,8 +22,8 @@
 #include "NebulaService.h"
 #include "HostRPCPool.h"
 #include "VMRPCPool.h"
-#include "MonitorDriverManager.h"
 #include "MonitorDriverMessages.h"
+#include "HostMonitorManager.h"
 
 class Monitor : public NebulaService
 {
@@ -47,7 +47,7 @@ private:
 
     std::unique_ptr<SqlDB> sqlDB;
 
-    std::unique_ptr<MonitorDriverManager> dm;
+    std::unique_ptr<HostMonitorManager> hm;
 
     /**
      *  Stream receiving UDP data from monitor agents.

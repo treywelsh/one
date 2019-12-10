@@ -24,7 +24,7 @@
 class HostPool;
 class Host;
 
-class InformationManager : public DriverManager<OpenNebulaMessages>, public ActionListener
+class InformationManager : public DriverManager<OpenNebulaMessages, Driver<OpenNebulaMessages>>, public ActionListener
 {
 public:
 

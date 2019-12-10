@@ -17,10 +17,10 @@
 #ifndef ONE_MONITOR_DRIVER_H_
 #define ONE_MONITOR_DRIVER_H_
 
-#include "HostMonitorManager.h"
-
 #include "OpenNebulaDriver.h"
 #include "OpenNebulaMessages.h"
+
+class HostMonitorManager;
 
 /**
  *  This class implements the Monitor Driver interface for oned.
@@ -28,41 +28,14 @@
 class OneMonitorDriver : public OpenNebulaDriver<OpenNebulaMessages>
 {
 public:
-    OneMonitorDriver(HostMonitorManager * _hm)
-    {
-        hm = _hm;
-
-        register_action(OpenNebulaMessages::UNDEFINED,
-                &OneMonitorDriver::_undefined);
-
-        register_action(OpenNebulaMessages::UPDATE_HOST,
-                &OneMonitorDriver::_update_host);
-
-        register_action(OpenNebulaMessages::DEL_HOST,
-                &OneMonitorDriver::_del_host);
-
-        register_action(OpenNebulaMessages::START_MONITOR,
-                &OneMonitorDriver::_start_monitor);
-
-        register_action(OpenNebulaMessages::STOP_MONITOR,
-                &OneMonitorDriver::_stop_monitor);
-    }
+    OneMonitorDriver(HostMonitorManager * _hm);
 
     /**
      *  Send a host state message to oned
      *    @param oid host id
      *    @param state for the host
      */
-    void host_state(int oid, const std::string& state)
-    {
-        Message<OpenNebulaMessages> oned_msg;
-
-        oned_msg.type(OpenNebulaMessages::HOST_STATE);
-        oned_msg.oid(oid);
-        oned_msg.payload(state);
-
-        write2one(oned_msg);
-    }
+    void host_state(int oid, const std::string& state);
 
 private:
     using message_t = std::unique_ptr<Message<OpenNebulaMessages>>;
@@ -70,45 +43,30 @@ private:
     //--------------------------------------------------------------------------
     // Message callbacks, implements the driver protocol
     //--------------------------------------------------------------------------
-    static void _undefined(message_t msg)
-    {
-        NebulaLog::info("MON", "Received UNDEFINED msg: " + msg->payload());
-    }
+    static void _undefined(message_t msg);
 
     /**
      *  Update information from a host
      */
-    static void _update_host(message_t msg)
-    {
-        hm->update_host(msg->oid(), msg->payload());
-    }
+    static void _update_host(message_t msg);
 
     /**
      *  Remove host from the pool
      */
-    static void _del_host(message_t msg)
-    {
-        hm->delete_host(msg->oid());
-    }
+    static void _del_host(message_t msg);
 
     /**
      *  Start the monitor agent/ or active monitor the host
      */
-    static void _start_monitor(message_t msg)
-    {
-        hm->start_host_monitor(msg->oid());
-    }
+    static void _start_monitor(message_t msg);
 
     /**
      *  Stop the monitor agent/ or stop monitor the host
      */
-    static void _stop_monitor(message_t msg)
-    {
-        hm->stop_host_monitor(msg->oid());
-    }
+    static void _stop_monitor(message_t msg);
 
 private:
-    static HostMonitorManager* hm;
+    static HostMonitorManager * hm;
 };
 
-#endif // MONITOR_DRIVER_H_
+#endif // ONE_MONITOR_DRIVER_H_
