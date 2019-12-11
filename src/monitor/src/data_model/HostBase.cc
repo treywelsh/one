@@ -179,38 +179,4 @@ int HostPool::discover(
 
     return rc;
 }
-
-
-int HostPool::clean_expired_monitoring()
-{
-    if ( _monitor_expiration == 0 )
-    {
-        return 0;
-    }
-
-    int             rc;
-    time_t          max_mon_time;
-    ostringstream   oss;
-
-    max_mon_time = time(0) - _monitor_expiration;
-
-    oss << "DELETE FROM " << one_db::host_monitor_table
-        << " WHERE last_mon_time < " << max_mon_time;
-
-    rc = db->exec_local_wr(oss);
-
-    return rc;
-}
-
-int HostPool::clean_all_monitoring()
-{
-    ostringstream   oss;
-    int             rc;
-
-    oss << "DELETE FROM " << one_db::host_monitor_table;
-
-    rc = db->exec_local_wr(oss);
-
-    return rc;
-}
 */

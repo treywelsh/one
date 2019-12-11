@@ -114,34 +114,6 @@ public:
     friend ostream& operator<<(ostream& o, const HostBase& host);
 
     /**
-     * Inserts the last monitoring, and deletes old monitoring entries for this
-     * host
-     *
-     * @param host pointer to the host object
-     * @return 0 on success
-     */
-    /*
-    int update_monitoring(Host * host)
-    {
-        if ( _monitor_expiration <= 0 )
-        {
-            return 0;
-        }
-
-        return host->update_monitoring(db);
-    };
-    */
-    /**
-     * Deletes the expired monitoring entries for all hosts
-     *
-     * @return 0 on success
-     */
-    /*
-    int clean_expired_monitoring();
-    */
-
-
-    /**
      * Get the least monitored hosts
      *   @param discovered hosts
      *   @param host_limit max. number of hosts to monitor at a time

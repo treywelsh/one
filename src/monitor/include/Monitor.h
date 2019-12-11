@@ -42,7 +42,7 @@ private:
     // ---------------------------------------------------------------
     // Pools
     // ---------------------------------------------------------------
-    std::unique_ptr<HostRPCPool> _hpool;
+    std::unique_ptr<HostRPCPool> hpool;
     std::unique_ptr<VMRPCPool>   vmpool;
 
     std::unique_ptr<SqlDB> sqlDB;

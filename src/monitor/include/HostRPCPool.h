@@ -23,9 +23,15 @@
 class HostRPCPool : public RPCPool
 {
 public:
-    explicit HostRPCPool(SqlDB* db)
-    : RPCPool(db)
-    {}
+    HostRPCPool(SqlDB* db, time_t expire_time)
+        : RPCPool(db)
+        , monitor_expiration(expire_time)
+    {
+        if (monitor_expiration <=0)
+        {
+            clean_all_monitoring();
+        }
+    }
 
     HostBase* get(int oid) const
     {
@@ -43,6 +49,13 @@ public:
      */
     int update_monitoring(const HostMonitoringTemplate& h);
 
+    /**
+     * Deletes the expired monitoring entries for all hosts
+     *
+     * @return 0 on success
+     */
+    int clean_expired_monitoring();
+
 protected:
     int load_info(xmlrpc_c::value &result) override;
 
@@ -59,7 +72,9 @@ protected:
         RPCPool::add_object<HostBase>(node);
     }
 
+    void clean_all_monitoring();
 private:
+    time_t monitor_expiration;
 };
 
 #endif // HOST_REMOTE_POOL_H_

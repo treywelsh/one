@@ -273,6 +273,8 @@ void HostMonitorManager::timer_action()
         NebulaLog::info("HMM", "--Mark--");
         mark = 0;
     }
+
+    hpool->clean_expired_monitoring();
 }
 
 /* -------------------------------------------------------------------------- */
