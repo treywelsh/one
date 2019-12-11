@@ -24,7 +24,7 @@ namespace one_db
     /* ---------------------------------------------------------------------- */
     const char * host_table = "host_pool";
 
-    const char * host_db_names = "oid, name, body, state, uid gid, owner_u, "
+    const char * host_db_names = "oid, name, body, state, uid, gid, owner_u, "
         "group_u, other_u, cid";
 
     const char * host_db_bootstrap =
