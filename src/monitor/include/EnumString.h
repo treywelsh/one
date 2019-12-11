@@ -19,12 +19,33 @@
 
 #include <map>
 #include <algorithm>
+#include <assert.h>
 
+/**
+ * Converts string to enum and back
+ */
 template <typename T>
 class EString
 {
 public:
-    EString(const std::map<std::string, T>&& _em):enum_map(_em) {};
+    /**
+     * Constructor
+     *  @param _em map with string associations
+     *  @param check_sanity check that all enums have a string representation
+     *          Works only for continuous enums starting with zero
+     *          Last enum must be ENUM_MAX
+     */
+    EString(const std::map<std::string, T>&& _em, bool check_sanity = true)
+        : enum_map(_em)
+    {
+        if (check_sanity && (int)T::ENUM_MAX != enum_map.size())
+        {
+            std::ostringstream oss;
+            oss << " EString: Not all strings defined for enum "
+                << typeid(T).name();
+            throw std::runtime_error(oss.str());
+        }
+    }
 
     T _from_str(const std::string& sv) const
     {

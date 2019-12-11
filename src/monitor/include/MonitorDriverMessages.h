@@ -32,7 +32,8 @@ enum class MonitorDriverMessages : unsigned short int
     SYSTEM_HOST  = 5,
     STATE_VM     = 6,
     START_MONITOR= 7,
-    STOP_MONITOR = 8
+    STOP_MONITOR = 8,
+    ENUM_MAX
 };
 
 #endif /*MONITOR_DRIVER_MESSAGES_H_*/
