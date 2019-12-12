@@ -122,7 +122,7 @@ void HostMonitorManager::update_host(int oid, const std::string &xml)
 {
     auto host = hpool->get(oid);
 
-    if (host)
+    if (host.valid())
     {
         host->from_xml(xml);
 
@@ -151,7 +151,7 @@ void HostMonitorManager::start_host_monitor(int oid)
 {
     auto host = hpool->get(oid);
 
-    if (!host)
+    if (!host.valid())
     {
         NebulaLog::warn("HMM", "start_monitor: unknown host " + to_string(oid));
         return;
@@ -180,7 +180,7 @@ void HostMonitorManager::stop_host_monitor(int oid)
 {
     auto host = hpool->get(oid);
 
-    if (!host)
+    if (!host.valid())
     {
         NebulaLog::warn("HMM", "stop_monitor: unknown host " + to_string(oid));
         return;
@@ -211,7 +211,7 @@ void HostMonitorManager::monitor_host(int oid, Template &tmpl)
 
     auto host = hpool->get(oid);
 
-    if (!host)
+    if (!host.valid())
     {
         NebulaLog::warn("HMM", "monitor_host: unknown host " + to_string(oid));
         return;

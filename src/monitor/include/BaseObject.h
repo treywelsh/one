@@ -18,6 +18,7 @@
 #define BASE_OBJECT_H_
 
 #include "ObjectXML.h"
+#include <mutex>
 
 class BaseObject : public ObjectXML
 {
@@ -79,6 +80,38 @@ protected:
     std::string _name;
     std::string _uname;
     std::string _gname;
+
+private:
+    template <typename BO> friend class BaseObjectLock;
+
+    std::mutex mtx;
+};
+
+template<typename BO>
+class BaseObjectLock
+{
+public:
+    BaseObjectLock(BaseObject * p)
+        : ptr(p)
+        , lck(p->mtx)
+    {};
+
+    BaseObjectLock(const BaseObjectLock&) = delete;
+
+    BaseObjectLock(BaseObjectLock&& o)
+        : ptr(o.ptr)
+        , lck(o.ptr->mtx, std::adopt_lock)
+    {};
+
+    ~BaseObjectLock(){};
+
+    BO * operator->() const { return static_cast<BO *>(ptr); };
+
+    bool valid() const { return ptr != nullptr; };
+
+private:
+    BaseObject * ptr;
+    std::lock_guard<std::mutex> lck;
 };
 
 #endif //BASE_OBJECT_H

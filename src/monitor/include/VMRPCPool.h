@@ -23,11 +23,13 @@
 class VMRPCPool : public RPCPool
 {
 public:
+    using VirtualMachineBaseLock = BaseObjectLock<VirtualMachineBase>;
+
     explicit VMRPCPool(SqlDB* db)
     : RPCPool(db)
     {}
 
-    VirtualMachineBase* get(int oid) const
+    VirtualMachineBaseLock get(int oid) const
     {
         return RPCPool::get<VirtualMachineBase>(oid);
     }

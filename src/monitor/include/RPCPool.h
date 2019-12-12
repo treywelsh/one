@@ -22,17 +22,12 @@
 #include "NebulaLog.h"
 
 #include <memory>
+#include <mutex>
+#include <functional>
 
 class RPCPool
 {
 public:
-    /**
-     * Returns list of objects
-     */
-    const map<int, std::unique_ptr<BaseObject>>& get_objects() const
-    {
-        return objects;
-    };
 
     /**
      *  Gets an object from the pool
@@ -41,8 +36,10 @@ public:
      *   @return a pointer to the object, 0 in case of failure
      */
     template<typename T>
-    T* get(int oid) const
+    BaseObjectLock<T> get(int oid) const
     {
+        std::lock_guard<std::mutex> lck(pool_mtx);
+
         auto it = objects.find(oid);
 
         if (it == objects.end())
@@ -51,7 +48,7 @@ public:
         }
         else
         {
-            return static_cast<T*>(it->second.get());
+            return BaseObjectLock<T>(it->second.get());
         }
     };
 
@@ -61,6 +58,8 @@ public:
      */
     void erase(int oid)
     {
+        std::lock_guard<std::mutex> lck(pool_mtx);
+
         auto it = objects.find(oid);
 
         if (it != objects.end())
@@ -71,6 +70,8 @@ public:
 
     void add_object(std::unique_ptr<BaseObject> o)
     {
+        std::lock_guard<std::mutex> lck(pool_mtx);
+
         objects[o->oid()] = std::move(o);
     }
 
@@ -79,6 +80,21 @@ public:
      *   @return 0 on success
      */
     int update();
+
+    /**
+     *  Execute the given function over each object in the pool
+     *    @param f the function
+     */
+    template<typename T>
+    void each(std::function< void(BaseObjectLock<T>&) >&& f)
+    {
+        std::lock_guard<std::mutex> lck(pool_mtx);
+
+        for (auto& e : objects)
+        {
+            f(BaseObjectLock<T>(e.second.get()));
+        }
+    }
 
 protected:
     // ------------------------------------------------------------------------
@@ -95,6 +111,7 @@ protected:
      */
     void clear()
     {
+        std::lock_guard<std::mutex> lck(pool_mtx);
         objects.clear();
     }
 
@@ -129,7 +146,10 @@ protected:
 
         auto obj = std::unique_ptr<T>(new T(node));
 
-        objects[obj->oid()] = std::move(obj);
+        {
+            std::lock_guard<std::mutex> lck(pool_mtx);
+            objects[obj->oid()] = std::move(obj);
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -140,16 +160,18 @@ protected:
      */
     Client* client;
 
-    // TODO Thread safety
+    /**
+     * DB to store monitoring information
+     */
+    SqlDB* db;
+
+    mutable std::mutex pool_mtx;
+
     /**
      * Hash map contains the suitable [id, object] pairs.
      */
     map<int, std::unique_ptr<BaseObject>> objects;
 
-    /**
-     * DB to store monitoring information
-     */
-    SqlDB* db;
 };
 
 #endif // REMOTE_POOL_H_

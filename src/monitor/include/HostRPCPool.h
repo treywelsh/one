@@ -23,6 +23,8 @@
 class HostRPCPool : public RPCPool
 {
 public:
+    using HostBaseLock = BaseObjectLock<HostBase>;
+
     HostRPCPool(SqlDB* db, time_t expire_time)
         : RPCPool(db)
         , monitor_expiration(expire_time)
@@ -33,7 +35,8 @@ public:
         }
     }
 
-    HostBase* get(int oid) const
+
+    HostBaseLock get(int oid) const
     {
         return RPCPool::get<HostBase>(oid);
     }
@@ -62,8 +65,6 @@ protected:
     int get_nodes(const ObjectXML& xml,
         std::vector<xmlNodePtr>& content) const override
     {
-        // todo Limit the list only to active hosts?
-        // return xml.get_nodes("/HOST_POOL/HOST[STATE=1 or STATE=2]", content);
         return xml.get_nodes("/HOST_POOL/HOST", content);
     }
 
@@ -73,8 +74,9 @@ protected:
     }
 
     void clean_all_monitoring();
+
 private:
     time_t monitor_expiration;
 };
 
-#endif // HOST_REMOTE_POOL_H_
+#endif // HOST_RPC_POOL_H_
