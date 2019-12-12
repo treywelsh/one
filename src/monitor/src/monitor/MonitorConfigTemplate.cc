@@ -27,6 +27,7 @@ void MonitorConfigTemplate::set_conf_default()
  MESSAGE_SIZE
  XMLRPC_TIMEOUT
  ONE_XMLRPC
+ HOST_MONITORING_EXPIRATION_TIME
  LOG
  DB
  UDP_LISTENER
@@ -38,6 +39,9 @@ void MonitorConfigTemplate::set_conf_default()
     conf_default.insert(make_pair(sa->name(), sa));
 
     sa = new SingleAttribute("ONE_XMLRPC", "http://localhost:2633/RPC2");
+    conf_default.insert(make_pair(sa->name(), sa));
+
+    sa = new SingleAttribute("HOST_MONITORING_EXPIRATION_TIME", "43200");
     conf_default.insert(make_pair(sa->name(), sa));
 
     va = new VectorAttribute("LOG", {{"SYSTEM", "FILE"}, {"DEBUG_LEVEL", "3"}});
