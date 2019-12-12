@@ -98,13 +98,24 @@ public:
         {
             ptr->mtx.lock();
         }
-    };
+    }
 
     BaseObjectLock(const BaseObjectLock&) = delete;
 
     BaseObjectLock(BaseObjectLock&& o)
         : ptr(o.ptr)
-    {};
+    {
+        o.ptr = nullptr;
+    }
+
+    BaseObjectLock& operator=(const BaseObjectLock&) = delete;
+
+    BaseObjectLock& operator=(BaseObjectLock&& o)
+    {
+        ptr = o.ptr;
+        o.ptr = nullptr;
+        return *this;
+    }
 
     ~BaseObjectLock()
     {
@@ -112,7 +123,7 @@ public:
         {
             ptr->mtx.unlock();
         }
-    };
+    }
 
     BO * operator->() const { return static_cast<BO *>(ptr); };
 
