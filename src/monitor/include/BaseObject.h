@@ -93,17 +93,26 @@ class BaseObjectLock
 public:
     BaseObjectLock(BaseObject * p)
         : ptr(p)
-        , lck(p->mtx)
-    {};
+    {
+        if (ptr)
+        {
+            ptr->mtx.lock();
+        }
+    };
 
     BaseObjectLock(const BaseObjectLock&) = delete;
 
     BaseObjectLock(BaseObjectLock&& o)
         : ptr(o.ptr)
-        , lck(o.ptr->mtx, std::adopt_lock)
     {};
 
-    ~BaseObjectLock(){};
+    ~BaseObjectLock()
+    {
+        if (ptr)
+        {
+            ptr->mtx.unlock();
+        }
+    };
 
     BO * operator->() const { return static_cast<BO *>(ptr); };
 
@@ -111,7 +120,6 @@ public:
 
 private:
     BaseObject * ptr;
-    std::lock_guard<std::mutex> lck;
 };
 
 #endif //BASE_OBJECT_H
