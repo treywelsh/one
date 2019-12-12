@@ -24,7 +24,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
-
+#include <atomic>
 #include <vector>
 
 #include "StreamManager.h"
@@ -62,7 +62,9 @@ public:
      */
     void stop()
     {
-        close(_socket);
+        terminate = true;
+
+        shutdown(_socket, SHUT_RDWR);
 
         for(auto& th : listener_threads)
         {
@@ -82,6 +84,8 @@ private:
     short unsigned int _port;
 
     std::vector<std::thread> listener_threads;
+
+    std::atomic<bool> terminate{false};
 };
 
 /* -------------------------------------------------------------------------- */
@@ -178,13 +182,13 @@ int UDPStream<E>::read_line(std::string& line)
 
     ssize_t rc = recvfrom(_socket, buffer, MESSAGE_SIZE, 0, &addr, &addr_size);
 
-    if ( rc == -1 )
-    {
-        return -1;
-    }
-    else if (rc > 0 && rc < MESSAGE_SIZE)
+    if (rc > 0 && rc < MESSAGE_SIZE)
     {
         line.assign(buffer, rc);
+    }
+    else if (rc < 0 || terminate)
+    {
+        return -1;
     }
     else
     {
