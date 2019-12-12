@@ -150,6 +150,11 @@ private:
      */
     void timer_action(const ActionRequest& ar) override;
 
+    /**
+     *  Process user action, used during initialization
+     */
+    void user_action(const ActionRequest& ar) override;
+
     void finalize_action(const ActionRequest& ar) override
     {
         NebulaLog::log("InM",Log::INFO,"Stopping Information Manager...");

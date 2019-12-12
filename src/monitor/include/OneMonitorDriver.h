@@ -46,6 +46,11 @@ private:
     static void _undefined(message_t msg);
 
     /**
+     *  List of all hosts in xml format
+     */
+    static void _host_list(message_t msg);
+
+    /**
      *  Update information from a host
      */
     static void _update_host(message_t msg);

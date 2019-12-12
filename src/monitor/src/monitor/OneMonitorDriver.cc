@@ -28,6 +28,9 @@ OneMonitorDriver::OneMonitorDriver(HostMonitorManager * _hm)
     register_action(OpenNebulaMessages::UNDEFINED,
             &OneMonitorDriver::_undefined);
 
+    register_action(OpenNebulaMessages::HOST_LIST,
+            &OneMonitorDriver::_host_list);
+
     register_action(OpenNebulaMessages::UPDATE_HOST,
             &OneMonitorDriver::_update_host);
 
@@ -63,20 +66,59 @@ void OneMonitorDriver::_undefined(message_t msg)
     NebulaLog::info("MON", "Received UNDEFINED msg: " + msg->payload());
 }
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void OneMonitorDriver::_host_list(message_t msg)
+{
+    NebulaLog::debug("OMD", "host_list:" + msg->payload());
+    ObjectXML xml(msg->payload());
+
+    vector<xmlNodePtr> nodes;
+
+    xml.get_nodes("/HOST_POOL/HOST", nodes);
+
+    for (const auto& node : nodes)
+    {
+        Template host(false,'=',"HOST");
+        host.from_xml_node(node);
+        int id;
+        if (host.get("ID", id))
+        {
+            string xml_str;
+            hm->update_host(id, host.to_xml(xml_str));
+        }
+    }
+
+    xml.free_nodes(nodes);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void OneMonitorDriver::_update_host(message_t msg)
 {
     hm->update_host(msg->oid(), msg->payload());
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 void OneMonitorDriver::_del_host(message_t msg)
 {
     hm->delete_host(msg->oid());
 }
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void OneMonitorDriver::_start_monitor(message_t msg)
 {
     hm->start_host_monitor(msg->oid());
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 void OneMonitorDriver::_stop_monitor(message_t msg)
 {

@@ -54,6 +54,8 @@ int InformationManager::start()
         NebulaLog::info("InM", "Information Manager stopped.");
     });
 
+    am.trigger(ActionRequest::USER);
+
     return rc;
 }
 
@@ -289,6 +291,28 @@ void InformationManager::timer_action(const ActionRequest& ar)
         host->unlock();
     }
     */
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void InformationManager::user_action(const ActionRequest& ar)
+{
+    auto * imd = get_driver("monitor");
+    if (!imd)
+    {
+        NebulaLog::error("InM", "Could not find information driver 'monitor'");
+
+        return;
+    }
+
+    string xml_hosts;
+    hpool->dump(xml_hosts, "", "", false);
+
+    Message<OpenNebulaMessages> msg;
+    msg.type(OpenNebulaMessages::HOST_LIST);
+    msg.payload(xml_hosts);
+    imd->write(msg);
 }
 
 // Old processing of monitoring message
