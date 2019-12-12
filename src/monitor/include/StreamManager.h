@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include <string.h>
 
 #include <map>
 #include <thread>
@@ -28,7 +30,6 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
-#include <sys/ioctl.h>
 
 #include "Message.h"
 
@@ -56,6 +57,8 @@ public:
     StreamManager(int __fd, callback_t error_cbk):_fd(__fd)
     {
         buffer = (char *) malloc(STREAM_MANAGER_BUFFER_SIZE * sizeof(char));
+
+        memset(static_cast<void *>(buffer), 0, STREAM_MANAGER_BUFFER_SIZE);
 
         register_action(E::UNDEFINED, error_cbk);
     };
