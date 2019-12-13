@@ -28,26 +28,30 @@
 class Monitor : public NebulaService
 {
 public:
+    Monitor(const std::string& filename): conf_filename(filename) {};
     /**
      *  Read configuration file and starts monitornig. (Blocking call)
      */
     void start();
 
-    /**
-     *  The main execution loop, handles the monitoring logic
-     */
-    void thread_execute();
-
 private:
-    // ---------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Pools
-    // ---------------------------------------------------------------
+    // -------------------------------------------------------------------------
     std::unique_ptr<HostRPCPool> hpool;
     std::unique_ptr<VMRPCPool>   vmpool;
 
+    // -------------------------------------------------------------------------
+    //  Daemon Modules
+    // -------------------------------------------------------------------------
     std::unique_ptr<SqlDB> sqlDB;
 
     std::unique_ptr<HostMonitorManager> hm;
+
+    // -------------------------------------------------------------------------
+    //  Configuration attributes
+    // -------------------------------------------------------------------------
+    std::string conf_filename;
 };
 
 #endif // MONITOR_H_

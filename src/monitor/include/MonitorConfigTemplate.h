@@ -23,8 +23,8 @@ class MonitorConfigTemplate : public NebulaTemplate
 {
 public:
 
-    explicit MonitorConfigTemplate(const string& etc_location):
-        NebulaTemplate(etc_location, "monitor.conf")
+    explicit MonitorConfigTemplate(const string& etc, const string& filename):
+        NebulaTemplate(etc, filename.c_str())
         {};
 
     ~MonitorConfigTemplate() = default;

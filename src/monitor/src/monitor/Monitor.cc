@@ -34,7 +34,8 @@ void Monitor::start()
     // -------------------------------------------------------------------------
     // Configuration File
     // -------------------------------------------------------------------------
-    config.reset(new MonitorConfigTemplate(get_defaults_location()));
+    config.reset(new MonitorConfigTemplate(get_defaults_location(),
+                conf_filename));
 
     if (config->load_configuration() != 0)
     {

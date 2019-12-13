@@ -681,7 +681,6 @@ INSTALL_ETC_FILES=(
 
 BIN_FILES="src/nebula/oned \
            src/scheduler/src/sched/mm_sched \
-           src/monitor/onemonitor \
            src/cli/onevm \
            src/cli/oneacct \
            src/cli/oneshowback \
@@ -776,7 +775,7 @@ MADS_LIB_FILES="src/mad/sh/madcommon.sh \
               src/im_mad/im_exec/one_im_sh \
               src/im_mad/dummy/one_im_dummy.rb \
               src/im_mad/dummy/one_im_dummy \
-              src/monitor/src/monitor/onemonitor \
+              src/monitor/src/monitor/onemonitord \
               src/tm_mad/one_tm \
               src/tm_mad/one_tm.rb \
               src/hm_mad/one_hm.rb \
