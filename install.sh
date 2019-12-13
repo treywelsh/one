@@ -1066,30 +1066,32 @@ IM_PROBES_FILES="src/im_mad/remotes/run_probes \
 IM_PROBES_KVM_FILES="src/im_mad/remotes/kvm.d/collectd-client_control.sh \
                      src/im_mad/remotes/kvm.d/collectd-client.rb"
 
-IM_PROBES_KVM_PROBES_FILES="src/im_mad/remotes/kvm-probes.d/kvm.rb \
-                     src/im_mad/remotes/kvm-probes.d/architecture.sh \
-                     src/im_mad/remotes/kvm-probes.d/cpu.sh \
-                     src/im_mad/remotes/kvm-probes.d/poll.sh \
-                     src/im_mad/remotes/kvm-probes.d/machines-models.rb \
-                     src/im_mad/remotes/kvm-probes.d/name.sh \
-                     src/im_mad/remotes/kvm-probes.d/pci.rb \
-                     src/im_mad/remotes/kvm-probes.d/numa.rb \
-                     src/im_mad/remotes/common.d/monitor_ds.sh \
-                     src/im_mad/remotes/common.d/version.sh \
+IM_PROBES_KVM_PROBES_FILES="src/im_mad/remotes/kvm-probes.d/host/monitor/kvm.rb \
+                     src/im_mad/remotes/kvm-probes.d/host/system/architecture.sh \
+                     src/im_mad/remotes/kvm-probes.d/host/system/cpu.sh \
+                     src/im_mad/remotes/kvm-probes.d/vms/monitor/poll.sh \
+                     src/im_mad/remotes/kvm-probes.d/vms/status/status.sh \
+                     src/im_mad/remotes/kvm-probes.d/host/system/machines-models.rb \
+                     src/im_mad/remotes/kvm-probes.d/host/system/name.sh \
+                     src/im_mad/remotes/kvm-probes.d/host/system/pci.rb \
+                     src/im_mad/remotes/kvm-probes.d/host/monitor/numa.rb \
+                     src/im_mad/remotes/common.d/host/system/monitor_ds.sh \
+                     src/im_mad/remotes/common.d/host/system/version.sh \
                      src/im_mad/remotes/common.d/collectd-client-shepherd.sh"
 
 IM_PROBES_ETC_KVM_PROBES_FILES="src/im_mad/remotes/kvm-probes.d/pci.conf"
 
-IM_PROBES_LXD_PROBES_FILES="src/im_mad/remotes/lxd-probes.d/lxd.rb \
-                     src/im_mad/remotes/lxd-probes.d/architecture.sh \
-                     src/im_mad/remotes/lxd-probes.d/cpu.sh \
-                     src/im_mad/remotes/lxd-probes.d/poll.sh \
-                     src/im_mad/remotes/lxd-probes.d/name.sh \
-                     src/im_mad/remotes/lxd-probes.d/pci.rb \
-                     src/im_mad/remotes/lxd-probes.d/numa.rb \
-                     src/im_mad/remotes/lxd-probes.d/monitor_ds.sh \
-                     src/im_mad/remotes/lxd-probes.d/version.sh \
-                     src/im_mad/remotes/lxd-probes.d/profiles.sh \
+IM_PROBES_LXD_PROBES_FILES="src/im_mad/remotes/lxd-probes.d/host/monitor/lxd.rb \
+                     src/im_mad/remotes/lxd-probes.d/host/system/architecture.sh \
+                     src/im_mad/remotes/lxd-probes.d/host/system/cpu.sh \
+                     src/im_mad/remotes/lxd-probes.d/vms/monitor/poll.sh \
+                     src/im_mad/remotes/lxd-probes.d/vms/status/status.sh \
+                     src/im_mad/remotes/lxd-probes.d/host/system/name.sh \
+                     src/im_mad/remotes/lxd-probes.d/host/system/pci.rb \
+                     src/im_mad/remotes/lxd-probes.d/host/monitor/numa.rb \
+                     src/im_mad/remotes/lxd-probes.d/host/system/monitor_ds.sh \
+                     src/im_mad/remotes/lxd-probes.d/host/system/version.sh \
+                     src/im_mad/remotes/lxd-probes.d/host/system/profiles.sh \
                      src/im_mad/remotes/lxd-probes.d/collectd-client-shepherd.sh"
 
 IM_PROBES_LXD_FILES="src/im_mad/remotes/lxd.d/collectd-client_control.sh \

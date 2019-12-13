@@ -58,19 +58,19 @@ class InformationManagerDriver < OpenNebulaDriver
         register_action(:STOPMONITOR, method("stop_monitor"))
 
         # collectd port
-        @collectd_port = 4124
         begin
             im_collectd = @config["IM_MAD"].select{|e| e.match(/collectd/)}[0]
             @collectd_port = im_collectd.match(/-p (\d+)/)[1]
         rescue
+            @collectd_port = 4124
         end
 
         # monitor_push_interval
-        @monitor_push_interval = 20
         begin
             im_collectd = @config["IM_MAD"].select{|e| e.match(/collectd/)}[0]
-            @monitor_push_interval = im_collectd.match(/-i (\d+)/)[1].to_i
+            @monitor_push_interval = im_collectd.match(/-i (\d+-\d+-\d+-\d+)/)[1]
         rescue
+            @monitor_push_interval = '60-5-5-1'
         end
     end
 

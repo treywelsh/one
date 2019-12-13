@@ -21,41 +21,110 @@ require 'base64'
 require 'resolv'
 require 'ipaddr'
 require 'zlib'
-
+require 'probe-manager'
+require 'yaml'
+require 'open3'
+require 'openssl'
 
 DIRNAME = File.dirname(__FILE__)
-REMOTE_DIR_UPDATE = File.join(DIRNAME, '../../.update')
 
 class CollectdClient
-    def initialize(hypervisor, number, host, port, probes_args,
-                   monitor_push_period)
-        # Arguments
-        @hypervisor          = hypervisor
-        @number              = number.to_i
-        @host                = get_ipv4_address(host)
-        @port                = port
-        @monitor_push_period = monitor_push_period
 
-        # Probes
-        run_probes_cmd = File.join(DIRNAME, '..', "run_probes")
-        @run_probes_cmd = "#{run_probes_cmd} #{@hypervisor}-probes #{probes_args}"
+    def initialize(host, port, probe_args)
+        open_socket(host, port)
+        init_keys
 
-        # Get last update
-        @last_update = get_last_update
+        probe_info(probe_args)
 
-        # Socket
-        @s = UDPSocket.new
+        @last_update = last_update
     end
 
-    def get_ipv4_address(host)
-        addresses=Resolv.getaddresses(host)
-        address=nil
+    def send(data, protocol, secure = true)
+        message, code = data
+        code ? result = 'SUCCESS' : result = 'FAILURE'
+
+        message = "MONITOR #{result} #{@retries} #{message}\n"
+        message = encrypt(message) if secure == true
+
+        socket = @socket_udp
+        socket = @socket_tcp if protocol == 'tcp'
+
+        socket.send(message, 0)
+    end
+
+    # Runs the specifed probes and sends the data
+    def monitor(probes, push_period, protocol)
+        before = Time.now
+
+        exit 0 if last_update != @last_update
+
+        data = run_probes(probes)
+        client.send(data, protocol, cache)
+
+        # Sleep during the Cycle
+        happened = (Time.now - before).to_i
+        sleep_time = push_period - happened
+        sleep sleep_time if sleep_time < 0
+    end
+
+    private
+
+    # TODO: Get keys from STDIN
+    def init_keys
+        ssh_conf = "#{ENV['HOME']}/.ssh"
+
+        key_pub = 'id_rsa.pub'
+        key_priv = "#{ssh_conf}/id_rsa"
+        key_pem = "#{ssh_conf}/#{key_pub}.pem"
+        key_pub.prepend "#{ssh_conf}/"
+
+        gen_pem = "ssh-keygen -f #{key_pub} -e -m pem > #{key_pem}"
+
+        `#{gen_pem}` unless File.file?(key_pem)
+
+        @key_pub = OpenSSL::PKey::RSA.new File.read key_pem
+        @key_priv = OpenSSL::PKey::RSA.new File.read key_priv
+    end
+
+    def encrypt(message)
+        @key_pub.public_encrypt(message)
+    end
+
+    def decrypt(message)
+        @key_priv.private_decrypt(message)
+    end
+
+    def probe_info(arguments)
+        @probe_args = arguments
+
+        cmd = File.join(DIRNAME, '..', 'run_probes')
+        @run_probes_cmd = "#{cmd} #{arguments[:hypervisor]}-probes.d"
+    end
+
+    def probe_cmd(dir)
+        cmd = "#{@run_probes_cmd}/#{dir}"
+
+        Open3.capture2e(cmd, :stdin_data => @probe_args.to_yaml)
+    end
+
+    def run_probes(dir)
+        data, code = probe_cmd(dir, push_period)
+
+        zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
+        data64 = Base64.encode64(zdata).strip.delete("\n")
+
+        [data64, code]
+    end
+
+    def ipv4_address(host)
+        addresses = Resolv.getaddresses(host)
+        address = nil
 
         addresses.each do |addr|
             begin
-                a=IPAddr.new(addr)
+                a = IPAddr.new(addr)
                 if a.ipv4?
-                    address=addr
+                    address = addr
                     break
                 end
             rescue
@@ -65,81 +134,59 @@ class CollectdClient
         address
     end
 
-    def run_probes
-        data   = `#{@run_probes_cmd} 2>&1`
-        code   = $?.exitstatus == 0
+    def open_sockets(host, port)
+        ip = ipv4_address(host)
 
-        result = code ? "SUCCESS" : "FAILURE"
-        msg = "RESULT=#{result} \nOID=#{@number} \n#{data}"
+        @socket_udp = UDPSocket.new
+        @socket_udp.bind(ip, port)
 
-        zdata  = Zlib::Deflate.deflate(msg, Zlib::BEST_COMPRESSION)
-        data64 = Base64::encode64(zdata).strip.delete("\n")
-
-        data64
+        @socket_tcp = TCPSocket.new
+        @socket_tcp.bind(ip, port)
     end
 
-    def send(data)
-        @s.send("MONITOR_HOST #{@number} #{data}\n", 0, @host, @port)
-    end
-
-    def monitor
-        loop do
-            # Stop the execution if we receive the update signal
-            exit 0 if stop?
-
-            # Collect the Data
-            ts = Time.now
-
-            # Send signal to itself to run probes and send the data
-            Process.kill('HUP', $$)
-
-            run_probes_time = (Time.now - ts).to_i
-
-            # Sleep during the Cycle
-            sleep_time = @monitor_push_period - run_probes_time
-            sleep_time = 0 if sleep_time < 0
-            sleep sleep_time
-        end
-    end
-
-    def get_last_update
+    def last_update
         File.stat(REMOTE_DIR_UPDATE).mtime.to_i rescue 0
     end
 
-    def stop?
-        get_last_update.to_i != @last_update.to_i
-    end
 end
 
-#Arguments: hypervisor(0) ds_location(1) collectd_port(2) monitor_push_period(3)
-#                         host_id(4) hostname(5)
+#######################
+# Argument processing #
+#######################
 
-hypervisor          = ARGV[0]
-port                = ARGV[2]
-monitor_push_period = ARGV[3].to_i
-number              = ARGV[4]
+host         = ENV['SSH_CLIENT'].split.first
+port         = ARGV[2]
+hypervisor   = ARGV[0]
+ds_location  = ARGV[1]
+push_periods = ARGV[3]
+retries      = ARGV[4]
 
-monitor_push_period = 20 if monitor_push_period == 0
+# TODO: Parse STDIN XML from monitord
+# xml = Base64.decode64 STDIN.read
 
-host       = ENV['SSH_CLIENT'].split.first
-probes_args= ARGV[1..-1].join(" ")
+#############################
+# Start push monitorization #
+#############################
 
-# Add a random sleep before the first send
-sleep rand monitor_push_period
+probe_args = {
+    :hypervisor     => hypervisor,
+    :ds_location    => ds_location,
+    :retries        => retries
+}
 
-# Start push monitorization
-client = CollectdClient.new(hypervisor, number, host, port, probes_args,
-                            monitor_push_period)
+client = CollectdClient.new(host, port, probe_args)
 
-Signal.trap('HUP') do
-    # ignore another HUP until we handle this one
-    this_handler = Signal.trap('HUP', 'IGNORE')
+threads = []
+threads << Thread.new { client.monitor('host/system', push_periods[0], 'tcp') }
+threads << Thread.new { client.monitor('host/monitor', push_periods[1], 'udp') }
+threads << Thread.new { client.monitor('vms/status', push_periods[2], 'tcp') }
+threads << Thread.new { client.monitor('vms/monitor', push_periods[3], 'udp') }
+threads << Thread.new { client.monitor('datastore/monitor', push_periods[1], 'tcp') }
 
-    data = client.run_probes
-    client.send data
-
-    # set the handler back
-    Signal.trap('HUP', this_handler)
+# TODO: Use particualr monitor_ds period or VM instantiation trigger
+threads << Thread.new do
+    sleep push_periods[0]
+    `#{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd.sh`
 end
 
-client.monitor
+threads.each {|thr| thr.join }

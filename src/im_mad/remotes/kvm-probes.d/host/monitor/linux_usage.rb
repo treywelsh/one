@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env ruby
 
 # -------------------------------------------------------------------------- #
 # Copyright 2002-2019, OpenNebula Project, OpenNebula Systems                #
@@ -16,42 +16,6 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-#Arguments: hypervisor(0) ds_location(1) collectd_port(2) host_id(3) hostname(4)
+require_relative '../../../lib/linux'
 
-source $(dirname $0)/../scripts_common.sh
-
-export LANG=C
-
-PROBE_DIR=$1
-STDIN=$2
-
-SCRIPTS_DIR=`dirname $0`
-cd $SCRIPTS_DIR
-
-function run_dir {
-    (
-    cd $1
-    for i in `ls * | grep -E -v '\.(rpmnew|rpmsave|dpkg-\w+)$'`;do
-        if [ -x "$i" ]; then
-            echo $STDIN | ./$i
-            EXIT_CODE=$?
-            if [ "x$EXIT_CODE" != "x0" ]; then
-                error_message "Error executing $i"
-                exit $EXIT_CODE
-            fi
-        fi
-    done
-    )
-}
-
-data=$(
-    if [ -d "$PROBE_DIR" ]; then
-        run_dir "$PROBE_DIR"
-    fi
-)
-
-EXIT_CODE=$?
-
-echo "$data"
-
-exit $EXIT_CODE
+LinuxHost.usage('kvm')
