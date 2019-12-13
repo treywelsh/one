@@ -1,5 +1,3 @@
-#!/usr/bin/ruby
-
 #!/usr/bin/env ruby
 
 # -------------------------------------------------------------------------- #
@@ -18,6 +16,6 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-require_relative '../../../lib/linux'
+require_relative '../lib/linux'
 
 LinuxHost.config('lxd')

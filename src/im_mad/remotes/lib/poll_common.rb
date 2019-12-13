@@ -25,12 +25,12 @@
 # @param file [String] Name of the configuration file
 # @param vars [Array] Array of variables to read
 def load_vars(hypervisor, file, vars)
-    env   = `. #{File.dirname($PROGRAM_NAME) + "/#{file}"};env`
+    env   = `. "#{file}"; env`
     lines = env.split("\n")
 
     vars.each do |var|
         lines.each do |line|
-            if a = line.match(/^(#{var})=(.*)$/)
+            if (a = line.match(/^(#{var})=(.*)$/))
                 hypervisor::CONF[var] = a[2]
                 break
             end

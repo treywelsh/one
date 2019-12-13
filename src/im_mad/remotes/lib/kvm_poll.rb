@@ -103,7 +103,7 @@ module KVM
 
         text = `#{virsh(:list)}`
 
-        return if $CHILD_STATUS.exitstatus != 0
+        return if $?.exitstatus != 0
 
         lines = text.split(/\n/)[2..-1]
 

@@ -1,1 +1,1 @@
-../../../common.d/monitor_ds.rb
+../../../node-probes.d/monitor_ds.rb

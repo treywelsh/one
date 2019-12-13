@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 # -------------------------------------------------------------------------- #
 # Copyright 2002-2019, OpenNebula Project, OpenNebula Systems                #

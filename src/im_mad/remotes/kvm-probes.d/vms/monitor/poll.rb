@@ -1,7 +1,7 @@
 #!/usr/bin/ruby
 
-require_relative '../../../lib/poll_common'
-require_relative '../../../lib/poll_kvm'
+require_relative '../lib/poll_common'
+require_relative '../lib/kvm_poll'
 
 KVM.load_conf
 

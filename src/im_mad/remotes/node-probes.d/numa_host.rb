@@ -16,7 +16,7 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-require_relative '../../../lib/numa_common'
+require_relative '../lib/numa_common'
 
 module NUMA
 
