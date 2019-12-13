@@ -34,7 +34,7 @@ void Monitor::start()
     // -------------------------------------------------------------------------
     // Configuration File
     // -------------------------------------------------------------------------
-    config = new MonitorConfigTemplate(get_defaults_location());
+    config.reset(new MonitorConfigTemplate(get_defaults_location()));
 
     if (config->load_configuration() != 0)
     {
@@ -187,6 +187,8 @@ void Monitor::start()
     }
 
     xmlCleanupParser();
+
+    one_util::SSLMutex::finalize();
 
     NebulaLog::finalize_log_system();
 }

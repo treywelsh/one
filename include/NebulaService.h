@@ -20,6 +20,7 @@
 #include "NebulaTemplate.h"
 #include "NebulaLog.h"
 #include <assert.h>
+#include <memory>
 
 /**
  *  This is the base class for the OpenNebula daemon. It provides access to
@@ -191,7 +192,6 @@ protected:
     // -----------------------------------------------------------------------
 
     NebulaService()
-        : config(0)
     {
         assert(!nebula_service && "Trying to create second NebulaServcie");
         nebula_service = this;
@@ -232,7 +232,7 @@ protected:
         nebula_service = nullptr;
     };
 
-    NebulaTemplate* config;
+    std::unique_ptr<NebulaTemplate> config;
 
 private:
     static NebulaService* nebula_service;
