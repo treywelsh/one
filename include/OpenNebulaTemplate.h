@@ -30,7 +30,8 @@ class OpenNebulaTemplate : public NebulaTemplate
 public:
 
     OpenNebulaTemplate(const string& etc_location, const string& _var_location):
-        NebulaTemplate(etc_location, conf_name), var_location(_var_location)
+        NebulaTemplate(etc_location, conf_name, "OPENNEBULA_CONFIGURATION"),
+        var_location(_var_location)
         {};
 
     ~OpenNebulaTemplate() = default;

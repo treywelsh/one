@@ -15,14 +15,8 @@
 /* -------------------------------------------------------------------------- */
 
 #include "InformationManager.h"
-//#include "Cluster.h"
-//#include "Nebula.h"
 #include "HostPool.h"
-//#include "RaftManager.h"
 #include "OpenNebulaMessages.h"
-
-
-//const time_t InformationManager::monitor_expire = 300;
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -33,8 +27,10 @@ int InformationManager::start()
 
     using namespace std::placeholders; // for _1
 
-    register_action(OpenNebulaMessages::UNDEFINED, bind(&InformationManager::_undefined, _1));
-    register_action(OpenNebulaMessages::HOST_STATE, bind(&InformationManager::_host_state, this, _1));
+    register_action(OpenNebulaMessages::UNDEFINED, &InformationManager::_undefined);
+
+    register_action(OpenNebulaMessages::HOST_STATE,
+            bind(&InformationManager::_host_state, this, _1));
 
     int rc = DriverManager::start(error);
 
@@ -64,7 +60,7 @@ int InformationManager::start()
 
 void InformationManager::stop_monitor(int hid, const string& name, const string& im_mad)
 {
-    auto * imd = get_driver("monitor");
+    auto * imd = get_driver("monitord");
 
     if (!imd)
     {
@@ -95,7 +91,7 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
     oss << "Monitoring host "<< host->get_name()<< " ("<< host->get_oid()<< ")";
     NebulaLog::log("InM",Log::DEBUG,oss);
 
-    auto imd = get_driver("monitor");
+    auto imd = get_driver("monitord");
 
     if (!imd)
     {
@@ -117,7 +113,7 @@ int InformationManager::start_monitor(Host * host, bool update_remotes)
 
 void InformationManager::update_host(Host *host)
 {
-    auto imd = get_driver("monitor");
+    auto imd = get_driver("monitord");
 
     if (!imd)
     {
@@ -137,7 +133,7 @@ void InformationManager::update_host(Host *host)
 
 void InformationManager::delete_host(int hid)
 {
-    auto imd = get_driver("monitor");
+    auto imd = get_driver("monitord");
 
     if (!imd)
     {
@@ -298,7 +294,7 @@ void InformationManager::timer_action(const ActionRequest& ar)
 
 void InformationManager::user_action(const ActionRequest& ar)
 {
-    auto * imd = get_driver("monitor");
+    auto * imd = get_driver("monitord");
     if (!imd)
     {
         NebulaLog::error("InM", "Could not find information driver 'monitor'");

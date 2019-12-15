@@ -51,38 +51,58 @@ static void print_help()
 
 int main(int argc, char **argv)
 {
-    static struct option long_options[] = {
-        {"version",no_argument, 0, 'v'},
-        {"help",   no_argument, 0, 'h'},
-        {"config", no_argument, 0, 'c'},
-        {0,        0,           0, 0}
-    };
+    std::string config = "monitor.conf";
 
-    int long_index = 0;
-    int opt;
-
-    std::string config = "monitord.conf";
-
-    while ((opt = getopt_long(argc, argv, "vhc:",
-                    long_options, &long_index)) != -1)
+    if ( argv[1] !=  0 )
     {
-        switch(opt)
+        //oned passes a single string with all the arguments for monitord
+        std::string argv_1 = argv[1];
+
+        std::vector<std::string> _argv = one_util::split(argv_1, ' ');
+        int _argc = _argv.size() + 1;
+
+        char ** _argv_c = (char **) malloc(sizeof(char *) * (_argc + 1));
+
+        _argv_c[0] = argv[0];
+
+        for (int i=1 ; i < _argc ; ++i)
         {
-            case 'v':
-                print_license();
-                exit(0);
-                break;
-            case 'h':
-                print_help();
-                exit(0);
-                break;
-            case 'c':
-                config = optarg;
-                break;
-            default:
-                print_usage(cerr);
-                exit(-1);
-                break;
+            _argv_c[i] = const_cast<char *>(_argv[i-1].c_str());
+        }
+
+        _argv_c[_argc] = 0;
+
+        static struct option long_options[] = {
+            {"version",no_argument, 0, 'v'},
+            {"help",   no_argument, 0, 'h'},
+            {"config", no_argument, 0, 'c'},
+            {0,        0,           0, 0}
+        };
+
+        int long_index = 0;
+        int opt;
+
+        while ((opt = getopt_long(_argc, _argv_c, "vhc:",
+                        long_options, &long_index)) != -1)
+        {
+            switch(opt)
+            {
+                case 'v':
+                    print_license();
+                    exit(0);
+                    break;
+                case 'h':
+                    print_help();
+                    exit(0);
+                    break;
+                case 'c':
+                    config = optarg;
+                    break;
+                default:
+                    print_usage(cerr);
+                    exit(-1);
+                    break;
+            }
         }
     }
 

@@ -593,14 +593,12 @@ void OpenNebulaTemplate::set_conf_default()
 # Hook Log Configuration
 #*******************************************************************************
 */
-
     vvalue.clear();
 
     vvalue.insert(make_pair("LOG_RETENTION","10"));
     vattribute = new VectorAttribute("HOOK_LOG_CONF", vvalue);
 
     conf_default.insert(make_pair(vattribute->name(),vattribute));
-
 }
 
 /* -------------------------------------------------------------------------- */

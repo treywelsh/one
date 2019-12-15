@@ -24,21 +24,19 @@
 class HostPool;
 class Host;
 
-class InformationManager : public DriverManager<OpenNebulaMessages, Driver<OpenNebulaMessages>>, public ActionListener
+class InformationManager :
+    public DriverManager<OpenNebulaMessages, Driver<OpenNebulaMessages>>,
+    public ActionListener
 {
 public:
 
     InformationManager(
-        HostPool *                  _hpool,
-        time_t                      _timer_period,
-        // time_t                      _monitor_period,
-        // int                         _host_limit,
+        HostPool * _hpool,
+        time_t     _timer_period,
         const string& mad_location)
             : DriverManager(mad_location)
             , hpool(_hpool)
             , timer_period(_timer_period)
-            // monitor_period(_monitor_period),
-            // host_limit(_host_limit),
     {
         am.addListener(this);
     }
@@ -123,24 +121,9 @@ private:
     time_t          timer_period;
 
     /**
-     *  Host monitoring interval
-     */
-    //time_t          monitor_period;
-
-    /**
-     *  Host monitoring limit
-     */
-    //int             host_limit;
-
-    /**
      *  Action engine for the Manager
      */
     ActionManager   am;
-
-    /**
-     *  Time in seconds to expire a monitoring action (5 minutes)
-     */
-    //static const time_t monitor_expire;
 
     // ------------------------------------------------------------------------
     // ActioListener Interface

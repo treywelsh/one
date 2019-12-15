@@ -942,11 +942,7 @@ void Nebula::start(bool bootstrap_only)
         nebula_configuration->get("HOST_PER_INTERVAL", host_limit);
         nebula_configuration->get("IM_MAD", im_mads);
 
-        im = new InformationManager(hpool,
-                                    timer_period,
-                                    //monitor_interval_host,
-                                    //host_limit,
-                                    mad_location);
+        im = new InformationManager(hpool, timer_period, mad_location);
 
         if (im->load_drivers(im_mads) != 0)
         {

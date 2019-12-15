@@ -1635,7 +1635,7 @@ ETC_FILES="share/etc/oned.conf \
            share/etc/defaultrc \
            src/tm_mad/tmrc \
            src/scheduler/etc/sched.conf \
-           src/monitor/etc/monitor.conf "
+           src/monitor/etc/monitord.conf "
 
 EC2_ETC_FILES="src/vmm_mad/remotes/ec2/ec2_driver.conf \
                src/vmm_mad/remotes/ec2/ec2_driver.default"

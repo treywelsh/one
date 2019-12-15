@@ -38,7 +38,9 @@ $LOAD_PATH << RUBY_LIB_LOCATION
 
 require 'OpenNebulaDriver'
 require 'getoptlong'
-
+require 'zlib'
+require 'base64'
+require 'document/rexml'
 
 # The SSH Information Manager Driver
 class InformationManagerDriver < OpenNebulaDriver
@@ -54,105 +56,120 @@ class InformationManagerDriver < OpenNebulaDriver
         @hypervisor = hypervisor
 
         # register actions
-        register_action(:MONITOR, method("action_monitor"))
-        register_action(:STOPMONITOR, method("stop_monitor"))
+        register_action(:START_MONITOR, method('start_monitor'))
+        register_action(:STOP_MONITOR, method('stop_monitor'))
 
         # collectd port
         begin
-            im_collectd = @config["IM_MAD"].select{|e| e.match(/collectd/)}[0]
+            im_collectd = @config['IM_MAD'].select{|e| e.match(/collectd/)}[0]
             @collectd_port = im_collectd.match(/-p (\d+)/)[1]
-        rescue
+        rescue StandardError
             @collectd_port = 4124
         end
 
         # monitor_push_interval
         begin
-            im_collectd = @config["IM_MAD"].select{|e| e.match(/collectd/)}[0]
+            im_collectd = @config['IM_MAD'].select{|e| e.match(/collectd/)}[0]
             @monitor_push_interval = im_collectd.match(/-i (\d+-\d+-\d+-\d+)/)[1]
-        rescue
+        rescue StandardError
             @monitor_push_interval = '60-5-5-1'
         end
     end
 
-    # Execute the run_probes in the remote host
-    def action_monitor(number, host, ds_location, do_update)
+    def start_monitor(hostid, zaction64)
+        zaction = Base64.decode64(zaction64)
+        action  = Zlib::Inflate.inflate(zaction)
 
-        if !action_is_local?(:MONITOR)
-            if do_update == "1" || @options[:force_copy]
-                # Recreate dir for remote scripts
-                mkdir_cmd = "mkdir -p #{@remote_scripts_base_path}"
+        action_xml = REXML::Document.new(action).root
+        host_xml   = action_xml['HOST']
+        config_xml = action_xml['MONITORD_CONFIGURATION']
 
-                cmd = SSHCommand.run(mkdir_cmd, host, log_method(number))
+        hostname = host_xml.elements['NAME'].text.to_s
+        config   = config_xml.text.to_s
 
-                if cmd.code!=0
-                    send_message('MONITOR', RESULT[:failure], number,
-                        'Could not update remotes')
-                    return
-                end
+        update_remotes(:START_MONITOR, hostid, hostname)
 
-                # Use SCP to sync:
-                sync_cmd = "scp -r #{@local_scripts_base_path}/* " \
-                    "#{host}:#{@remote_scripts_base_path}"
+        do_action('', hostid, hostname,
+                  :START_MONITOR,
+                  :stdin => config,
+                  :script_name => 'run_probes')
 
-                # Use rsync to sync:
-                # sync_cmd = "rsync -Laz #{REMOTES_LOCATION}
-                #   #{host}:#{@remote_dir}"
-                cmd=LocalCommand.run(sync_cmd, log_method(number))
-
-                if cmd.code!=0
-                    send_message('MONITOR', RESULT[:failure], number,
-                        'Could not update remotes')
-                    return
-                end
-            end
-        end
-
-        args = "#{@hypervisor} #{ds_location} #{@collectd_port}"
-        args << " #{@monitor_push_interval}"
-        do_action(args, number, host,:MONITOR, :script_name => 'run_probes',
-                  :base64 => true)
+    rescue StandardError => e
+        send_message(:START_MONITOR, RESULT[:failure], hostid, e.what.to_s)
     end
 
     def stop_monitor(number, host)
-        do_action("#{@hypervisor}", number, host,
-                :STOPMONITOR, :script_name => 'stop_probes', :base64 => true)
+        do_action(@hypervisor.to_s, number, host,
+                  :STOPMONITOR,
+                  :script_name => 'stop_probes',
+                  :base64 => true)
     end
-end
 
+    private
+
+    def update_remotes(action, hostid, hostname)
+        # Recreate dir for remote scripts
+        mkdir_cmd = "mkdir -p #{@remote_scripts_base_path}"
+
+        cmd = SSHCommand.run(mkdir_cmd, hostname, log_method(hostid))
+
+        if cmd.code != 0
+            send_message(action, RESULT[:failure], hostid,
+                         'Could not update remotes')
+            return
+        end
+
+        # Use SCP to sync:
+        sync_cmd = "scp -r #{@local_scripts_base_path}/* " \
+            "#{hostname}:#{@remote_scripts_base_path}"
+
+        # Use rsync to sync:
+        # sync_cmd = "rsync -Laz #{REMOTES_LOCATION} " \
+        #   #{hostname}:#{@remote_dir}"
+        cmd = LocalCommand.run(sync_cmd, log_method(number))
+
+        if cmd.code != 0
+            send_message(action, RESULT[:failure], hosid,
+                         'Could not update remotes')
+            return
+        end
+    end
+
+end
 
 # Information Manager main program
 
 opts = GetoptLong.new(
-    [ '--retries',    '-r', GetoptLong::OPTIONAL_ARGUMENT ],
-    [ '--threads',    '-t', GetoptLong::OPTIONAL_ARGUMENT ],
-    [ '--local',      '-l', GetoptLong::NO_ARGUMENT ],
-    [ '--force-copy', '-c', GetoptLong::NO_ARGUMENT ],
-    [ '--timeout',    '-w', GetoptLong::OPTIONAL_ARGUMENT ]
+    ['--retries',    '-r', GetoptLong::OPTIONAL_ARGUMENT],
+    ['--threads',    '-t', GetoptLong::OPTIONAL_ARGUMENT],
+    ['--local',      '-l', GetoptLong::NO_ARGUMENT],
+    ['--force-copy', '-c', GetoptLong::NO_ARGUMENT],
+    ['--timeout',    '-w', GetoptLong::OPTIONAL_ARGUMENT]
 )
 
-hypervisor      = ''
-retries         = 0
-threads         = 15
-local_actions   = {}
-force_copy      = false
-timeout         = nil
+hypervisor    = ''
+retries       = 0
+threads       = 15
+local_actions = {}
+force_copy    = false
+timeout       = nil
 
 begin
     opts.each do |opt, arg|
         case opt
-            when '--retries'
-                retries = arg.to_i
-            when '--threads'
-                threads = arg.to_i
-            when '--local'
-                local_actions={ 'MONITOR' => nil }
-            when '--force-copy'
-                force_copy=true
-            when '--timeout'
-                timeout = arg.to_i
+        when '--retries'
+            retries = arg.to_i
+        when '--threads'
+            threads = arg.to_i
+        when '--local'
+            local_actions={ 'MONITOR' => nil }
+        when '--force-copy'
+            force_copy=true
+        when '--timeout'
+            timeout = arg.to_i
         end
     end
-rescue Exception => e
+rescue StandardError
     exit(-1)
 end
 
@@ -161,10 +178,9 @@ if ARGV.length >= 1
 end
 
 im = InformationManagerDriver.new(hypervisor,
-                                  :concurrency      => threads,
-                                  :retries          => retries,
-                                  :local_actions    => local_actions,
-                                  :force_copy       => force_copy,
-                                  :timeout          => timeout)
-
+                                  :concurrency => threads,
+                                  :retries => retries,
+                                  :local_actions => local_actions,
+                                  :force_copy => force_copy,
+                                  :timeout => timeout)
 im.start_driver

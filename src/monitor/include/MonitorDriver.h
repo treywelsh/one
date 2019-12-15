@@ -17,10 +17,14 @@
 #ifndef MONITOR_DRIVER_H_
 #define MONITOR_DRIVER_H_
 
+#include "Monitor.h"
+
 #include "Driver.h"
 #include "Message.h"
 #include "MonitorDriverMessages.h"
 #include "MonitorDriverProtocol.h"
+
+#include <cstdarg>
 
 
 class MonitorDriver : public Driver<MonitorDriverMessages>
@@ -50,10 +54,11 @@ public:
     void start_monitor(int oid, const std::string& host_xml)
     {
         message_t msg;
+        NebulaService& ns = Monitor::instance();
 
         msg.type(MonitorDriverMessages::START_MONITOR);
         msg.oid(oid);
-        msg.payload(host_xml);
+        msg.payload(format_message(host_xml + ns.get_configuration_xml()));
 
         write(msg);
     }
@@ -64,9 +69,16 @@ public:
 
         msg.type(MonitorDriverMessages::STOP_MONITOR);
         msg.oid(oid);
-        msg.payload(host_xml);
+        msg.payload(format_message(host_xml));
 
         write(msg);
+    }
+
+private:
+
+    string format_message(const std::string& value) const
+    {
+        return "<MONITOR_DRIVER_ACTION>" + value + "</MONITOR_DRIVER_ACTION>";
     }
 };
 
