@@ -26,6 +26,8 @@ require 'yaml'
 require 'open3'
 require 'openssl'
 
+require 'rexml/document'
+
 DIRNAME = File.dirname(__FILE__)
 
 class CollectdClient
@@ -150,32 +152,42 @@ class CollectdClient
 
 end
 
-#######################
-# Argument processing #
-#######################
+#-------------------------------------------------------------------------------
+# Configuration (from monitord)
+#-------------------------------------------------------------------------------
+xml_txt    = STDIN.read
+probe_args = {}
 
-host         = ENV['SSH_CLIENT'].split.first
-port         = ARGV[2]
-hypervisor   = ARGV[0]
-ds_location  = ARGV[1]
-push_periods = ARGV[3]
-retries      = ARGV[4]
+begin
+    action_xml = REXML::Document.new(xml_txt).root
+    config_xml = action_xml.elements['MONITOR_CONFIGURATION']
+    host_xml   = action_xml.elements['HOST']
 
-# TODO: Parse STDIN XML from monitord
-# xml = Base64.decode64 STDIN.read
+    host   = config_xml.elements['UDP_LISTENER/MONITOR_ADDRESS'].text.to_s
+    port   = config_xml.elements['UDP_LISTENER/PORT'].text.to_s
+    pubkey = config_xml.elements['UDP_LISTENER/PUBKEY'].text.to_s
+    hyperv = host_xml.elements['IM_MAD'].text.to_s
 
-#############################
-# Start push monitorization #
-#############################
+    probe_args = {
+        :host => host,
+        :port => port,
+        :pubkey => pubkey,
+        :hypervisor => hyperv
+    }
+rescue StandardError => e
+    puts e.inspect
+    exit(-1)
+end
 
-probe_args = {
-    :hypervisor     => hypervisor,
-    :ds_location    => ds_location,
-    :retries        => retries
-}
-
+#-------------------------------------------------------------------------------
+# Run configuration probes and send information to monitord
+#-------------------------------------------------------------------------------
 client = CollectdClient.new(host, port, probe_args)
+# TODO: execute host/system + datastore/monitor
 
+#-------------------------------------------------------------------------------
+# Start monitor threads and shepherd
+#-------------------------------------------------------------------------------
 threads = []
 threads << Thread.new { client.monitor('host/system', push_periods[0], 'tcp') }
 threads << Thread.new { client.monitor('host/monitor', push_periods[1], 'udp') }

@@ -40,7 +40,7 @@ require 'OpenNebulaDriver'
 require 'getoptlong'
 require 'zlib'
 require 'base64'
-require 'document/rexml'
+require 'rexml/document'
 
 # The SSH Information Manager Driver
 class InformationManagerDriver < OpenNebulaDriver
@@ -58,22 +58,6 @@ class InformationManagerDriver < OpenNebulaDriver
         # register actions
         register_action(:START_MONITOR, method('start_monitor'))
         register_action(:STOP_MONITOR, method('stop_monitor'))
-
-        # collectd port
-        begin
-            im_collectd = @config['IM_MAD'].select{|e| e.match(/collectd/)}[0]
-            @collectd_port = im_collectd.match(/-p (\d+)/)[1]
-        rescue StandardError
-            @collectd_port = 4124
-        end
-
-        # monitor_push_interval
-        begin
-            im_collectd = @config['IM_MAD'].select{|e| e.match(/collectd/)}[0]
-            @monitor_push_interval = im_collectd.match(/-i (\d+-\d+-\d+-\d+)/)[1]
-        rescue StandardError
-            @monitor_push_interval = '60-5-5-1'
-        end
     end
 
     def start_monitor(hostid, zaction64)
@@ -81,21 +65,21 @@ class InformationManagerDriver < OpenNebulaDriver
         action  = Zlib::Inflate.inflate(zaction)
 
         action_xml = REXML::Document.new(action).root
-        host_xml   = action_xml['HOST']
-        config_xml = action_xml['MONITORD_CONFIGURATION']
+        host_xml   = action_xml.elements['HOST']
+        config_xml = action_xml.elements['MONITOR_CONFIGURATION']
 
         hostname = host_xml.elements['NAME'].text.to_s
-        config   = config_xml.text.to_s
+        im_mad   = host_xml.elements['IM_MAD'].text.to_s
+        config   = config_xml.to_s
 
         update_remotes(:START_MONITOR, hostid, hostname)
 
-        do_action('', hostid, hostname,
+        do_action(im_mad, hostid, hostname,
                   :START_MONITOR,
                   :stdin => config,
                   :script_name => 'run_probes')
-
     rescue StandardError => e
-        send_message(:START_MONITOR, RESULT[:failure], hostid, e.what.to_s)
+        send_message(:START_MONITOR, RESULT[:failure], hostid, e.message)
     end
 
     def stop_monitor(number, host)
@@ -126,7 +110,7 @@ class InformationManagerDriver < OpenNebulaDriver
         # Use rsync to sync:
         # sync_cmd = "rsync -Laz #{REMOTES_LOCATION} " \
         #   #{hostname}:#{@remote_dir}"
-        cmd = LocalCommand.run(sync_cmd, log_method(number))
+        cmd = LocalCommand.run(sync_cmd, log_method(hostid))
 
         if cmd.code != 0
             send_message(action, RESULT[:failure], hosid,
