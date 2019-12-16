@@ -236,7 +236,6 @@ define(function(require) {
     opts.div = div;
     opts.user_inputs = inputs;
     opts.defaults = $.extend({}, template_json.VMTEMPLATE.TEMPLATE);
-
     return _generateInstantiateUserInputs(opts);
   }
 
@@ -246,7 +245,10 @@ define(function(require) {
   // returns true if at least one input was inserted
   function _generateServiceTemplateUserInputs(div, template_json, opts) {
     if(opts == undefined){
-      opts = {};
+      opts = {
+        select_networks: false,
+        pass: false
+      };
     }
 
     opts.div = div;
@@ -270,7 +272,6 @@ define(function(require) {
     if (defaults == undefined){
       defaults = {};
     }
-
     div.empty();
 
     var html = "";
@@ -291,92 +292,133 @@ define(function(require) {
       opts.network_header = Locale.tr("Network");
     }
 
+    function checkItemInArray(object={}, list=[], index="name") {
+      var rtn = true;
+      if(typeof object === "object" && Array.isArray(list)){
+        if(
+          list.some(
+            function(item){
+              return (item[index] === object[index]);
+            }
+          )
+        ){
+          rtn = false;
+        }
+      }
+      return rtn;
+    }
+
     $.each(user_inputs, function(key, value) {
       var attrs = _parse(key, value);
-
       if (defaults[key] != undefined){
         attrs.initial = opts.defaults[key];
       }
-
       if (attrs.type == "vnet_id"){
-        network_attrs.push(attrs);
+        if(checkItemInArray(attrs, network_attrs, 'name')){
+          network_attrs.push(attrs);
+        }
       } else {
-        input_attrs.push(attrs);
+        if(checkItemInArray(attrs, input_attrs, 'name')){
+          input_attrs.push(attrs);
+        }
       }
     });
 
     if (network_attrs.length > 0) {
       html += "<fieldset>";
       if (opts.network_header.length > 0) {
-        html += "<legend>" +
-            opts.network_header +
-          "</legend>" +
-          "</div>";
+        html += "<legend>" + opts.network_header + "</legend></div>";
       }
 
-      html += "<div class=\"instantiate_user_inputs\">" +
-          "</div>" +
-        "</fieldset>";
-
+      html += "<div class=\"instantiate_user_inputs\"></div></fieldset>";
       div.append(html);
+      var separator = $("<div>");
 
-      var separator = "";
-
-      var vnetsTable;
       $.each(network_attrs, function(index, vnet_attr) {
-        //JRGE
         var unique_id = "vnet_user_input_" + UniqueId.id();
         vnetsTable = new VNetsTable(unique_id, {"select": true});
-        $(".instantiate_user_inputs", div).append("<div class=\"row\"><div class=\"large-12 large-centered columns\">"+separator+"<h5>"+TemplateUtils.htmlEncode(vnet_attr.description)+"</h5><div class='row'><div class='columns small-12'><select class='changePlaceDatatable' data-nametable='"+vnet_attr.name+"' data-idtable='"+unique_id+"' data-id='"+index+"'><option value='existing'>"+Locale.tr("Existing")+"</option><option value='create'>"+Locale.tr("Create")+"</option><option value='reserve'>"+Locale.tr("Reserve")+"</option></select></div><div class='columns small-12' id='placeDatatable_"+index+"'>"+vnetsTable.dataTableHTML +"</div></div></div></div>");
-        separator = "<hr/>";
+        if(opts && opts.select_networks){
+          $(".instantiate_user_inputs", div).append(
+            $("<div>", {class:"row"}).append(
+              $("<div>",{class: "large-12 large-centered columns"}).append(
+                separator.add(
+                  $("<h5>").text(TemplateUtils.htmlEncode(vnet_attr.description)).add(
+                    $("<div>",{class: "row"}).append(
+                      $("<div>",{class:"columns small-12"}).append(
+                        $("<select>",{
+                          class: "changePlaceDatatable", 
+                          wizard_field: 'type_'+vnet_attr.name,
+                          'data-nametable': vnet_attr.name,
+                          'data-idtable': unique_id,
+                          'data-id': index
+                        }).append(
+                          $("<option>",{value:"existing"}).text(Locale.tr("Existing")).add(
+                            $("<option>", {value: "create"}).text(Locale.tr("Create"))
+                          ).add(
+                            $("<option>", {value: "reserve"}).text(Locale.tr("Reserve"))
+                          )
+                        )
+                      ).add($("<div>",
+                        {
+                          class:"columns small-12", 
+                          id:"placeDatatable_"+index
+                        }
+                      ).html(vnetsTable.dataTableHTML))
+                    )
+                  )
+                )
+              )
+            )
+          );
+        }
+        separator = $("<hr/>");
         vnetsTable.initialize();
         $("#refresh_button_" + unique_id).click();
         vnetsTable.idInput().attr("wizard_field", vnet_attr.name).attr("required", "");
       });
 
-      $(".changePlaceDatatable").change(function(e){
-        // faltaria hacer los default!!!
-        e.preventDefault();
-        var element = $(this);
-        var id = element.attr("data-id");
-        var idtable = element.attr("data-idtable");
-        var nametable = element.attr("data-nametable");
-        var value = element.val();
-        var place = $("#placeDatatable_"+id);
-
-        //create a table
-        if(value === "reserve" || value === "existing"){
-          var vnetsTable = new VNetsTable(idtable, {"select": true});
-          place.empty().append(vnetsTable.dataTableHTML);
-          vnetsTable.initialize();
-          $("#refresh_button_"+idtable).click();
-          vnetsTable.idInput().attr("wizard_field", nametable).attr("required", "");
-        }else{
-          var vnetsTemplateTable = new VNetsTemplateTable(idtable, {"select": true});
-          place.empty().append(vnetsTemplateTable.dataTableHTML);
-          vnetsTemplateTable.initialize();
-          $("#refresh_button_"+idtable).click();
-          vnetsTemplateTable.idInput().attr("wizard_field", nametable).attr("required", "");
-        }
-
-        // create input extra
-        if(value === "create" || value === "reserve"){
-          // falta colocar el render de las diferentes tablas!!!
-          if(!place.find(".addExtra_"+id).length){
-            place.append(
-              $("<div/>",{class:"row addExtra_"+id}).append(
-                $("<div/>",{class:"columns small-12"}).append(
-                  $("<label/>").text(Locale.tr("Extra")).add(
-                    $("<input/>",{type:"text", name: "extra",id: "extra",placeholder: Locale.tr("Extra") })
+      if(opts && opts.select_networks){
+        $(".changePlaceDatatable").change(function(e){
+          e.preventDefault();
+          var element = $(this);
+          var id = element.attr("data-id");
+          var idtable = element.attr("data-idtable");
+          var nametable = element.attr("data-nametable");
+          var value = element.val();
+          var place = $("#placeDatatable_"+id);
+          //create a table
+          if(value === "reserve" || value === "existing"){
+            var vnetsTable = new VNetsTable(idtable, {"select": true});
+            place.empty().append(vnetsTable.dataTableHTML);
+            vnetsTable.initialize();
+            $("#refresh_button_"+idtable).click();
+            vnetsTable.idInput().attr("wizard_field", nametable).attr("required", "");
+          }else{
+            var vnetsTemplateTable = new VNetsTemplateTable(idtable, {"select": true});
+            place.empty().append(vnetsTemplateTable.dataTableHTML);
+            vnetsTemplateTable.initialize();
+            $("#refresh_button_"+idtable).click();
+            vnetsTemplateTable.idInput().attr("wizard_field", nametable).attr("required", "");
+          }
+          // create input extra
+          if(value === "create" || value === "reserve"){
+            // falta colocar el render de las diferentes tablas!!!
+            if(!place.find(".addExtra_"+id).length){
+              place.append(
+                $("<div/>",{class:"row addExtra_"+id}).append(
+                  $("<div/>",{class:"columns small-12"}).append(
+                    $("<label/>").text(Locale.tr("Extra")).add(
+                      $("<input/>",{wizard_field: "extra_"+nametable ,type:"text", name: "extra", id: "extra", placeholder: Locale.tr("Extra") })
+                    )
                   )
                 )
-              )
-            );
+              );
+            }
+          }else{
+            place.find(".addExtra_"+id).remove();
           }
-        }else{
-          place.find(".addExtra_"+id).remove();
-        }
-      });
+        });
+      }
     }
 
     if (input_attrs.length > 0) {
@@ -394,7 +436,7 @@ define(function(require) {
 
       div.append(html);
 
-      if(opts.defaults.INPUTS_ORDER){
+      if(opts.defaults && opts.defaults.INPUTS_ORDER){
         var order = opts.defaults.INPUTS_ORDER;
         var orderJSON = order.split(",");
         $.each(orderJSON, function(key, value){
@@ -421,19 +463,22 @@ define(function(require) {
       } else {
         $.each(input_attrs, function(index, custom_attr) {
           var tooltip = "";
-          if (custom_attr.type === "list-multiple"){
-            tooltip = " <span class=\"tip\">" + Locale.tr("Use ctrl key for multiple selection") + "</span>";
+          if(custom_attr && custom_attr.description){
+            if (custom_attr.type === "list-multiple"){
+              tooltip = " <span class=\"tip\">" + Locale.tr("Use ctrl key for multiple selection") + "</span>";
+            }
+            $(".instantiate_user_inputs", div).append(
+              "<div class=\"row\">" +
+                "<div class=\"large-12 large-centered columns\">" +
+                  "<label>" +
+                    TemplateUtils.htmlEncode(custom_attr.description) +
+                    tooltip +
+                    _attributeInput(custom_attr) +
+                  "</label>" +
+                "</div>" +
+              "</div>"
+            );
           }
-          $(".instantiate_user_inputs", div).append(
-            "<div class=\"row\">" +
-              "<div class=\"large-12 large-centered columns\">" +
-                "<label>" +
-                  TemplateUtils.htmlEncode(custom_attr.description) +
-                  tooltip +
-                  _attributeInput(custom_attr) +
-                "</label>" +
-              "</div>" +
-            "</div>");
         });
       }
     }

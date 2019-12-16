@@ -53,11 +53,9 @@ define(function(require) {
   function Panel(info) {
     this.title = Locale.tr("Info");
     this.icon = "fa-info-circle";
-
     this.element = info[XML_ROOT];
-
     return this;
-  };
+  }
 
   Panel.PANEL_ID = PANEL_ID;
   Panel.prototype.html = _html;
