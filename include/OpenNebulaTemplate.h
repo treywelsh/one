@@ -103,11 +103,6 @@ private:
     void register_multiple_conf_default(const std::string& conf_section);
 
     /**
-     *  Sets a default single attribute value
-     */
-    void set_conf_single(const std::string& attr, const std::string& value);
-
-    /**
      *  Sets a the defaults for a DS
      */
     void set_conf_ds(const std::string& name,

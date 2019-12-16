@@ -59,6 +59,13 @@ public:
      */
     int clean_expired_monitoring();
 
+    /**
+     * Get the least monitored hosts
+     *   @param discovered hosts
+     *   @param target_time Filters hosts with last_mon_time <= target_time
+     */
+    void discover(set<int> * discovered_hosts, time_t target_time);
+
 protected:
     int load_info(xmlrpc_c::value &result) override;
 

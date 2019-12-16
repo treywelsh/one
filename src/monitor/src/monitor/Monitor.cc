@@ -165,8 +165,16 @@ void Monitor::start()
 
     config->get("IM_MAD", drivers_conf);
 
-    hm.reset(new HostMonitorManager(hpool.get(), addr, port, threads,
-                get_mad_location()));
+    int timer_period;
+    int monitor_interval_host;
+    config->get("MANAGER_TIMER", timer_period);
+    config->get("MONITORING_INTERVAL_HOST", monitor_interval_host);
+
+    hm.reset(new HostMonitorManager(hpool.get(),
+                addr, port, threads,
+                get_mad_location(),
+                timer_period,
+                monitor_interval_host));
 
     if (hm->load_monitor_drivers(drivers_conf) != 0)
     {

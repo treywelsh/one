@@ -86,6 +86,8 @@ public:
 
     int oid() const { return _oid; }
 
+    void oid(int oid) { _oid = oid; }
+
     time_t timestamp() const { return _timestamp; }
 
     void timestamp(time_t timestamp) { _timestamp = timestamp; }

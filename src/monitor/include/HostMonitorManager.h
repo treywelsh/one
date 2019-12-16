@@ -18,6 +18,7 @@
 #define HOST_MONITOR_MANAGER_H_
 
 #include "MonitorDriverMessages.h"
+#include "HostRPCPool.h"
 #include <vector>
 
 class Template;
@@ -25,8 +26,6 @@ class VectorAttribute;
 
 template<typename E, typename D>
 class DriverManager;
-
-class HostRPCPool;
 
 class OneMonitorDriver;
 class UDPMonitorDriver;
@@ -41,8 +40,11 @@ class Monitor;
 class HostMonitorManager
 {
 public:
-    HostMonitorManager(HostRPCPool *hp, const std::string& addr, unsigned int port,
-            unsigned int threads, const std::string& driver_path);
+    HostMonitorManager(HostRPCPool *hp,
+            const std::string& addr, unsigned int port, unsigned int threads,
+            const std::string& driver_path,
+            int timer_period,
+            int monitor_interval_host);
 
     ~HostMonitorManager();
 
@@ -113,7 +115,22 @@ private:
 
     unsigned int udp_threads;
 
+    /**
+     *  Timer period for timer_action loop
+     */
     int timer_period;
+
+    /**
+     *  Host monitoring interval
+     */
+    int monitor_interval_host;
+
+    /**
+     *  Time in seconds to expire a monitoring action (5 minutes)
+     */
+    static const time_t monitor_expire;
+
+    void start_host_monitor(const HostRPCPool::HostBaseLock& host);
 };
 
 #endif //HOST_MONITOR_MANAGER_H_

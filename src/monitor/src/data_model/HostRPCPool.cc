@@ -102,6 +102,19 @@ int HostRPCPool::clean_expired_monitoring()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+void HostRPCPool::discover(set<int> * discovered_hosts, time_t target_time)
+{
+    each<HostBase>([&](const BaseObjectLock<HostBase>& o) {
+        if (o->last_monitored() < target_time)
+        {
+            discovered_hosts->insert(o->oid());
+        }
+    });
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void HostRPCPool::clean_all_monitoring()
 {
     ostringstream   oss;

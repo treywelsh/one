@@ -30,6 +30,8 @@
 
 using namespace std;
 
+const time_t HostMonitorManager::monitor_expire = 300;
+
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
@@ -38,10 +40,13 @@ HostMonitorManager::HostMonitorManager(
         const std::string& addr,
         unsigned int       port,
         unsigned int       threads,
-        const std::string& driver_path)
+        const std::string& driver_path,
+        int                timer_period,
+        int                monitor_interval_host)
     : hpool(hp)
     , udp_threads(threads)
-    , timer_period(30)
+    , timer_period(timer_period)
+    , monitor_interval_host(monitor_interval_host)
 {
     oned_driver    = new OneMonitorDriver(this);
     udp_driver     = new UDPMonitorDriver(addr, port);
@@ -112,6 +117,7 @@ int HostMonitorManager::start(std::string& error)
     //End monitor drivers
     driver_manager->stop();
 
+
     return 0;
 }
 
@@ -133,6 +139,8 @@ void HostMonitorManager::update_host(int oid, const std::string &xml)
     else
     {
         hpool->add_object(xml);
+
+        start_host_monitor(oid);
     }
 }
 
@@ -157,20 +165,7 @@ void HostMonitorManager::start_host_monitor(int oid)
         return;
     }
 
-    auto driver = driver_manager->get_driver(host->im_mad());
-
-    if (!driver)
-    {
-        NebulaLog::error("HMM", "start_monitor: Cannot find driver " + host->im_mad());
-        return;
-    }
-
-    NebulaLog::debug("HMM", "Monitoring host " +host->name() + "("
-            + to_string(host->oid()) + ")");
-
-    string xml = host->to_xml();
-
-    driver->start_monitor(oid, xml);
+    start_host_monitor(host);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -200,6 +195,7 @@ void HostMonitorManager::stop_host_monitor(int oid)
     string xml = host->to_xml();
 
     driver->stop_monitor(oid, xml);
+    host->monitor_in_progress(false);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -225,6 +221,12 @@ void HostMonitorManager::monitor_host(int oid, Template &tmpl)
         return;
     }
 
+    if (host->state() == Host::HostState::OFFLINE)
+    {
+        // Host is offline, we shouldn't receive monitoring
+        return;
+    }
+
     HostMonitoringTemplate monitoring;
 
     monitoring.timestamp(time(nullptr));
@@ -243,6 +245,7 @@ void HostMonitorManager::monitor_host(int oid, Template &tmpl)
     };
 
     host->last_monitored(monitoring.timestamp());
+    host->monitor_in_progress(false);
 
     NebulaLog::info("MON", "Successfully monitored host: " + to_string(oid));
 
@@ -274,11 +277,82 @@ void HostMonitorManager::timer_action()
         mark = 0;
     }
 
+
     hpool->clean_expired_monitoring();
+
+    set<int> discovered_hosts;
+    time_t now = time(nullptr);
+    time_t target_time = now - monitor_interval_host;
+
+    hpool->discover(&discovered_hosts, target_time);
+
+    if (discovered_hosts.empty())
+    {
+        return;
+    }
+
+    for (const auto& host_id : discovered_hosts)
+    {
+        auto host = hpool->get(host_id);
+
+        if (!host.valid())
+        {
+            continue;
+        }
+
+        auto monitor_length = now - host->last_monitored();
+
+
+        if (host->monitor_in_progress())
+        {
+            if (monitor_length >= monitor_expire)
+            {
+                // Host is being monitored for more than monitor_expire secs.
+                start_host_monitor(host);
+            }
+        }
+        else if (host->state() == Host::HostState::OFFLINE)
+        {
+            host->last_monitored(now);
+
+            HostMonitoringTemplate monitoring;
+
+            monitoring.timestamp(now);
+            monitoring.oid(host_id);
+
+            hpool->update_monitoring(monitoring);
+        }
+        else
+        {
+            // Not received an update in the monitor period.
+            start_host_monitor(host);
+        }
+    }
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+void HostMonitorManager::start_host_monitor(const HostRPCPool::HostBaseLock& host)
+{
+    auto driver = driver_manager->get_driver(host->im_mad());
+
+    if (!driver)
+    {
+        NebulaLog::error("HMM", "start_monitor: Cannot find driver " + host->im_mad());
+        return;
+    }
+
+    host->monitor_in_progress(true);
+    host->last_monitored(time(nullptr));
+
+    NebulaLog::debug("HMM", "Monitoring host " +host->name() + "("
+            + to_string(host->oid()) + ")");
+
+    string xml = host->to_xml();
+
+    driver->start_monitor(host->oid(), xml);
+}
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 /*

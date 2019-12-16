@@ -21,7 +21,6 @@
 /* -------------------------------------------------------------------------- */
 void MonitorConfigTemplate::set_conf_default()
 {
-    SingleAttribute * sa;
     VectorAttribute * va;
 /*
  MESSAGE_SIZE
@@ -32,17 +31,14 @@ void MonitorConfigTemplate::set_conf_default()
  DB
  UDP_LISTENER
  */
-    sa = new SingleAttribute("MESSAGE_SIZE", "1073741824");
-    conf_default.insert(make_pair(sa->name(), sa));
+    set_conf_single("MESSAGE_SIZE", "1073741824");
+    set_conf_single("XMLRPC_TIMEOU", "60");
+    set_conf_single("ONE_XMLRPC", "http://localhost:2633/RPC2");
 
-    sa = new SingleAttribute("XMLRPC_TIMEOU", "60");
-    conf_default.insert(make_pair(sa->name(), sa));
-
-    sa = new SingleAttribute("ONE_XMLRPC", "http://localhost:2633/RPC2");
-    conf_default.insert(make_pair(sa->name(), sa));
-
-    sa = new SingleAttribute("HOST_MONITORING_EXPIRATION_TIME", "43200");
-    conf_default.insert(make_pair(sa->name(), sa));
+    // Timers
+    set_conf_single("MANAGER_TIMER", "15");
+    set_conf_single("MONITORING_INTERVAL_HOST", "180");
+    set_conf_single("HOST_MONITORING_EXPIRATION_TIME", "43200");
 
     va = new VectorAttribute("LOG", {{"SYSTEM", "FILE"}, {"DEBUG_LEVEL", "3"}});
     conf_default.insert(make_pair(va->name(), va));

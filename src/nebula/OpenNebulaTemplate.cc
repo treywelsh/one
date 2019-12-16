@@ -244,18 +244,6 @@ void OpenNebulaTemplate::register_multiple_conf_default(
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void OpenNebulaTemplate::set_conf_single(const std::string& attr,
-                                         const std::string& value)
-{
-    SingleAttribute *   attribute;
-
-    attribute = new SingleAttribute(attr, value);
-    conf_default.insert(make_pair(attribute->name(),attribute));
-}
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
 void OpenNebulaTemplate::set_conf_ds(const std::string& name,
                                      const std::string& required_attrs,
                                      const std::string& persistent_only)

@@ -157,26 +157,3 @@ ostream& operator<<(ostream& o, const HostBase& host)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
-
-/*
-int HostPool::discover(
-        set<int> *  discovered_hosts,
-        int         host_limit,
-        time_t      target_time)
-{
-    ostringstream sql;
-    set_cb<int>   cb;
-
-    cb.set_callback(discovered_hosts);
-
-    sql << "SELECT oid FROM " << one_db::host_table
-        << " WHERE last_mon_time <= " << target_time
-        << " ORDER BY last_mon_time ASC LIMIT " << host_limit;
-
-    int rc = db->exec_rd(sql, &cb);
-
-    cb.unset_callback();
-
-    return rc;
-}
-*/

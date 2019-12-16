@@ -107,22 +107,16 @@ public:
 
     void last_monitored(time_t lm) { _last_monitored = lm; }
 
+    bool monitor_in_progress() const { return _monitor_in_progress; }
+
+    void monitor_in_progress(bool monitoring) { _monitor_in_progress = monitoring; }
+
     /**
      *  Prints the Host information to an output stream. This function is used
      *  for logging purposes.
      */
     friend ostream& operator<<(ostream& o, const HostBase& host);
 
-    /**
-     * Get the least monitored hosts
-     *   @param discovered hosts
-     *   @param host_limit max. number of hosts to monitor at a time
-     *   @param target_time Filters hosts with last_mon_time <= target_time
-     *   @return int 0 if success
-     */
-    /*
-    int discover(set<int> * discovered_hosts, int host_limit, time_t target_time);
-    */
 protected:
     int init_attributes();
 
@@ -140,6 +134,7 @@ private:
     Template _obj_template;
 
     time_t   _last_monitored = 0;
+    bool     _monitor_in_progress = false;
 };
 
 #endif // HOST_BASE_H_

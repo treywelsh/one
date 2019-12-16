@@ -60,6 +60,11 @@ protected:
      *  Sets the defaults value for multiple attributes
      */
     virtual void set_multiple_conf_default() = 0;
+
+    /**
+     *  Sets a default single attribute value
+     */
+    void set_conf_single(const std::string& attr, const std::string& value);
 };
 
 #endif /*NEBULA_TEMPLATE_H_*/

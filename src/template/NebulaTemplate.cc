@@ -71,3 +71,15 @@ int NebulaTemplate::load_configuration()
 
     return 0;
 }
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void NebulaTemplate::set_conf_single(const std::string& attr,
+                                     const std::string& value)
+{
+    SingleAttribute *   attribute;
+
+    attribute = new SingleAttribute(attr, value);
+    conf_default.insert(make_pair(attribute->name(),attribute));
+}
