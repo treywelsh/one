@@ -1,7 +1,6 @@
 require 'opennebula'
 require 'base64'
 
-# Database Live Operations
 class OneDBLive
 
     EDITOR_PATH = '/bin/vi'
@@ -16,11 +15,9 @@ class OneDBLive
         @client ||= OpenNebula::Client.new
     end
 
-    # rubocop:disable Naming/MemoizedInstanceVariableName
     def system_db
         @system ||= OpenNebula::System.new(client)
     end
-    # rubocop:enable Naming/MemoizedInstanceVariableName
 
     def db_escape(string)
         escaped = string.gsub("'", "''")
@@ -191,8 +188,8 @@ class OneDBLive
             history = select('history', "vid = #{vm.id}")
 
             # Renumerate sequence numbers
-            old_seq.each_with_index do |o_seq, index|
-                row = history.find {|r| o_seq.to_s == r['seq'] }
+            old_seq.each_with_index do |seq, index|
+                row = history.find {|r| seq.to_s == r['seq'] }
                 next unless row
 
                 body = Base64.decode64(row['body64'])
@@ -203,15 +200,15 @@ class OneDBLive
 
                 update('history',
                        { :seq => index, :body => new_body },
-                       "vid = #{vm.id} and seq = #{o_seq}", false)
+                       "vid = #{vm.id} and seq = #{seq}", false)
             end
         end
     end
 
     def purge_done_vm(options = {})
         ops         = { :start_time => 0,
-                        :end_time => Time.now,
-                        :pages => PAGES }.merge(options)
+                        :end_time   => Time.now,
+                        :pages      => PAGES }.merge(options)
         vmpool      = OpenNebula::VirtualMachinePool.new(client, Pool::INFO_ALL)
         start_time  = ops[:start_time].to_i
         end_time    = ops[:end_time].to_i
@@ -241,22 +238,24 @@ class OneDBLive
         p_val = parsed[:value].strip
         val.strip!
 
-        case parsed[:operator]
-        when '='
-            val == p_val
-        when '!='
-            val != p_val
-        when '<'
-            val.to_i < p_val.to_i
-        when '>'
-            val.to_i > p_val.to_i
-        when '<='
-            val.to_i <= p_val.to_i
-        when '>='
-            val.to_i >= p_val.to_i
-        else
-            false
-        end
+        res = false
+
+        res = case parsed[:operator]
+              when '='
+                  val == p_val
+              when '!='
+                  val != p_val
+              when '<'
+                  val.to_i < p_val.to_i
+              when '>'
+                  val.to_i > p_val.to_i
+              when '<='
+                  val.to_i <= p_val.to_i
+              when '>='
+                  val.to_i >= p_val.to_i
+              end
+
+        res
     end
 
     def get_pool_config(object)
@@ -356,12 +355,14 @@ class OneDBLive
     def change_history(vid, seq, xpath, value, options)
         begin
             doc = get_history_body(vid, seq)
-        rescue StandardError => e
+        rescue => e
             STDERR.puts e.message
             return
         end
 
-        doc.xpath(xpath).each {|el| el.content = value }
+        doc.xpath(xpath).each do |e|
+            e.content = value
+        end
 
         xml = doc.root.to_xml
 
@@ -369,12 +370,9 @@ class OneDBLive
             puts xml
         else
             begin
-                update_body('history',
-                            xml,
-                            "vid = #{vid} and seq = #{seq}",
-                            false)
-            rescue StandardError => e
-                STDERR.puts "Error updating history record #{seq} for VM #{vid}"
+                update_body('history', xml, "vid = #{vid} and seq = #{seq}", false)
+            rescue => e
+                STDERR.puts "Error updating history recored #{seq} for VM #{vid}"
                 STDERR.puts e.message
             end
         end
@@ -403,7 +401,7 @@ class OneDBLive
             # Get body from the database
             begin
                 db_data = select(table, "oid = #{o.id}")
-            rescue StandardError => e
+            rescue => e
                 STDERR.puts "Error getting object id #{o.id}"
                 STDERR.puts e.message
                 next
@@ -416,22 +414,11 @@ class OneDBLive
                 c.default_xml.noblanks
             end
 
-            doc.xpath(xpath).each do |el|
+            doc.xpath(xpath).each do |e|
                 if options[:delete]
-                    el.remove
+                    e.remove
                 else
-                    el.content = value
-                end
-            end
-
-            if options[:append]
-                # take just last match of / to get the xpath and the key
-                matches = xpath.match(%r{(.*)/(.*)?})
-                key     = matches[2].upcase
-
-                doc.xpath(matches[1]).each do |el|
-                    val = doc.create_cdata(value)
-                    el.add_child("<#{key}>#{val}</#{key}>")
+                    e.content = value
                 end
             end
 
@@ -442,7 +429,7 @@ class OneDBLive
             else
                 begin
                     update_body(table, xml, "oid = #{o.id}", federate)
-                rescue StandardError => e
+                rescue => e
                     STDERR.puts "Error updating object id #{o.id}"
                     STDERR.puts e.message
                     next
@@ -450,10 +437,7 @@ class OneDBLive
             end
             break if found_id
         end
-
-        return if options[:id] && found_id
-
-        raise "Object with id #{options[:id]} not found"
+        raise "Object with id #{options[:id]} not found" if options[:id] && !found_id
     end
 
     def editor_body(body_xml)
@@ -473,7 +457,7 @@ class OneDBLive
 
         unless $CHILD_STATUS.exitstatus == 0
             puts 'Editor not defined'
-            exit(-1)
+            exit -1
         end
 
         tmp.close
@@ -482,12 +466,12 @@ class OneDBLive
     end
 
     def update_body_cli(object, id)
-        table, _object, federate = get_pool_config(object)
+        table, object, federate = get_pool_config(object)
 
         # Get body from the database
         begin
             db_data = select(table, "oid = #{id}")
-        rescue StandardError => e
+        rescue => e
             STDERR.puts "Error getting object id #{o.id}"
             STDERR.puts e.message
         end
@@ -510,7 +494,7 @@ class OneDBLive
             xml = xml_doc.root.to_xml
 
             update_body(table, xml, "oid = #{id}", federate)
-        rescue StandardError => e
+        rescue => e
             STDERR.puts "Error updating object id #{id}"
             STDERR.puts e.message
         end
@@ -519,7 +503,7 @@ class OneDBLive
     def update_history_cli(vid, seq)
         begin
             doc = get_history_body(vid, seq)
-        rescue StandardError => e
+        rescue => e
             STDERR.puts e.message
             return
         end
@@ -535,19 +519,19 @@ class OneDBLive
             xml = xml_doc.root.to_xml
 
             update_body('history', xml, "vid = #{vid} and seq = #{seq}", false)
-        rescue StandardError => e
+        rescue => e
             STDERR.puts "Error updating history record #{seq} for VM #{vid}"
             STDERR.puts e.message
         end
     end
 
     def show_body_cli(object, id)
-        table, _object, _federate = get_pool_config(object)
+        table, object, federate = get_pool_config(object)
 
         # Get body from the database
         begin
             db_data = select(table, "oid = #{id}")
-        rescue StandardError => e
+        rescue => e
             STDERR.puts "Error getting object id #{id}"
             STDERR.puts e.message
         end
@@ -565,7 +549,7 @@ class OneDBLive
     def show_history_cli(vid, seq)
         begin
             doc = get_history_body(vid, seq)
-        rescue StandardError => e
+        rescue => e
             STDERR.puts e.message
             return
         end
@@ -576,7 +560,7 @@ class OneDBLive
     def get_history_body(vid, seq)
         begin
             db_data = select('history', "vid = #{vid} and seq = #{seq}")
-        rescue StandardError => e
+        rescue => e
             error_str = "Error getting history record #{seq} for VM #{vid}"
             error_str << e.message
 
