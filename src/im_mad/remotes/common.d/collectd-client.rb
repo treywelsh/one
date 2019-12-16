@@ -21,7 +21,6 @@ require 'base64'
 require 'resolv'
 require 'ipaddr'
 require 'zlib'
-require 'probe-manager'
 require 'yaml'
 require 'open3'
 require 'openssl'
@@ -159,14 +158,12 @@ xml_txt    = STDIN.read
 probe_args = {}
 
 begin
-    action_xml = REXML::Document.new(xml_txt).root
-    config_xml = action_xml.elements['MONITOR_CONFIGURATION']
-    host_xml   = action_xml.elements['HOST']
+    config_xml = REXML::Document.new(xml_txt).root
 
     host   = config_xml.elements['UDP_LISTENER/MONITOR_ADDRESS'].text.to_s
     port   = config_xml.elements['UDP_LISTENER/PORT'].text.to_s
     pubkey = config_xml.elements['UDP_LISTENER/PUBKEY'].text.to_s
-    hyperv = host_xml.elements['IM_MAD'].text.to_s
+    hyperv = ARGV[0]
 
     probe_args = {
         :host => host,

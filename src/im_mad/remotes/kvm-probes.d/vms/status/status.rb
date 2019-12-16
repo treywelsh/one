@@ -1,8 +1,8 @@
 #!/usr/bin/ruby
 
-require_relative '../../../lib/poll_common'
-require_relative '../../../lib/poll_kvm'
-require_relative '../../../lib/probe_db'
+require_relative '../lib/poll_common'
+require_relative '../lib/kvm_poll'
+require_relative '../lib/probe_db'
 
 module KVM
 
@@ -12,7 +12,7 @@ module KVM
 
         text = `#{virsh(:list)}`
 
-        return if $CHILD_STATUS.exitstatus != 0
+        return if $?.exitstatus != 0
 
         lines = text.split(/\n/)[2..-1]
 

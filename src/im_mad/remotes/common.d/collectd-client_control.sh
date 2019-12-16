@@ -30,6 +30,7 @@ fi
 
 ARGV=$*
 
+STDIN=`cat -`
 #--------------------------------------------------------------------------- #
 #--------------------------------------------------------------------------- #
 
@@ -47,7 +48,7 @@ CLIENT_PID_FILE=/tmp/one-collectd-client.pid
 
 # Launch the client
 function start_client() {
-    nohup /usr/bin/env ruby $CLIENT $ARGV >/dev/null 2>&1 &
+    nohup echo $STDIN | /usr/bin/env ruby $CLIENT $ARGV >/dev/null 2>&1 &
 }
 
 function stop_client() {
