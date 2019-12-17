@@ -128,7 +128,7 @@ class CollectdClient
                     address = addr
                     break
                 end
-            rescue
+            rescue StandardError
             end
         end
 
@@ -171,6 +171,14 @@ begin
         :pubkey => pubkey,
         :hypervisor => hyperv
     }
+
+    periods = {
+        :hs => config_xml.elements['PROBE_PERIOD/HS'].text.to_i,
+        :hm => config_xml.elements['PROBE_PERIOD/HI'].text.to_i,
+        :vms => config_xml.elements['PROBE_PERIOD/VMS'].text.to_i,
+        :vmm => config_xml.elements['PROBE_PERIOD/VMM'].text.to_i,
+        :ds => config_xml.elements['PROBE_PERIOD/DS'].text.to_i
+    }
 rescue StandardError => e
     puts e.inspect
     exit(-1)
@@ -186,15 +194,14 @@ client = CollectdClient.new(host, port, probe_args)
 # Start monitor threads and shepherd
 #-------------------------------------------------------------------------------
 threads = []
-threads << Thread.new { client.monitor('host/system', push_periods[0], 'tcp') }
-threads << Thread.new { client.monitor('host/monitor', push_periods[1], 'udp') }
-threads << Thread.new { client.monitor('vms/status', push_periods[2], 'tcp') }
-threads << Thread.new { client.monitor('vms/monitor', push_periods[3], 'udp') }
-threads << Thread.new { client.monitor('datastore/monitor', push_periods[1], 'tcp') }
+threads << Thread.new { client.monitor('host/system', periods[:hs], 'tcp') }
+threads << Thread.new { client.monitor('host/monitor', periods[:hm], 'udp') }
+threads << Thread.new { client.monitor('vms/status', periods[:vms], 'tcp') }
+threads << Thread.new { client.monitor('vms/monitor', periods[:vmm], 'udp') }
+threads << Thread.new { client.monitor('datastore/monitor', periods[:ds], 'tcp') }
 
-# TODO: Use particualr monitor_ds period or VM instantiation trigger
-threads << Thread.new do
-    sleep push_periods[0]
+threads << Thread.new do # TODO: decide which period
+    sleep periods[:hs]
     `#{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd.sh`
 end
 
