@@ -86,7 +86,7 @@ public:
      *    @param f the function
      */
     template<typename T>
-    void each(std::function< void(BaseObjectLock<T>&) >&& f)
+    void each(std::function< void(BaseObjectLock<T>&&) >&& f)
     {
         std::lock_guard<std::mutex> lck(pool_mtx);
 
@@ -145,7 +145,6 @@ protected:
         }
 
         auto obj = std::unique_ptr<T>(new T(node));
-
         {
             std::lock_guard<std::mutex> lck(pool_mtx);
             objects[obj->oid()] = std::move(obj);
