@@ -95,7 +95,7 @@ public:
      *    @param oid host id
      *    @param tmpl monitoring template
      */
-    void monitor_host(int oid, Template &tmpl);
+    void monitor_host(int oid, bool result, Template &tmpl);
 
     /**
      *  This function is executed periodically to update host monitor status

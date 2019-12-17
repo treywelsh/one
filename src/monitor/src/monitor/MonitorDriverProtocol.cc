@@ -32,7 +32,7 @@ void MonitorDriverProtocol::_undefined(message_t msg)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
- void MonitorDriverProtocol::_monitor_vm(message_t msg)
+void MonitorDriverProtocol::_monitor_vm(message_t msg)
 {
 
 }
@@ -40,7 +40,7 @@ void MonitorDriverProtocol::_undefined(message_t msg)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
- void MonitorDriverProtocol::_monitor_host(message_t msg)
+void MonitorDriverProtocol::_monitor_host(message_t msg)
 {
     NebulaLog::ddebug("MDP", "Received monitoring for host: " +
             to_string(msg->oid()));
@@ -60,10 +60,12 @@ void MonitorDriverProtocol::_undefined(message_t msg)
         return;
     }
 
-   hm->monitor_host(msg->oid(), tmpl);
+    bool result = msg->status() == "SUCCESS" ? true : false;
+
+    hm->monitor_host(msg->oid(), result, tmpl);
 }
 
- void MonitorDriverProtocol::_system_host(message_t msg)
+void MonitorDriverProtocol::_system_host(message_t msg)
 {
 
 }
@@ -71,7 +73,7 @@ void MonitorDriverProtocol::_undefined(message_t msg)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
- void MonitorDriverProtocol::_state_vm(message_t msg)
+void MonitorDriverProtocol::_state_vm(message_t msg)
 {
 
 }

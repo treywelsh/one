@@ -41,12 +41,15 @@ int rsa_private_decrypt(const std::string& in, std::string& out);
  *  This class represents a generic message used by the Monitoring Protocol.
  *  The structure of the message is:
  *
- *  +----+-----+---------+------+
- *  | ID | ' ' | PAYLOAD | '\n' |
- *  +----+-----+---------+------+
+ *  +------+-----+--------+-----+-----+---------+------+
+ *  | TYPE | ' ' | STATUS | ' ' | OID | PAYLOAD | '\n' |
+ *  +------+-----+--------+-----+-----+---------+------+
  *
- *    ID String (non-blanks) identifying the message type
- *    ' ' A single white space to separate ID and payload
+ *    TYPE String (non-blanks) identifying the message type
+ *    ' ' A single white space to separate fields
+ *    STATUS String (non-blanks), status of the message depends on message
+ *      type, could contain result of operation ("SUCCESS" or "FAILURE")
+ *    OID Number, id of affected object, -1 if not object related
  *    PAYLOAD of the message XML base64 encoded
  *    '\n' End of message delimiter
  *
@@ -89,11 +92,33 @@ public:
         _type = t;
     }
 
+    /**
+     *  Returns type of the message as string
+     */
     const std::string& type_str() const
     {
         return _type_str._to_str(_type);
     }
 
+    /**
+     *  Status of the message, can't contain blanks.
+     *  Depends on message type, could contain result of
+     *  operation ("SUCCESS" or "FAILURE")
+     *  Default value is "-"
+     */
+    const std::string& status() const
+    {
+        return _status;
+    }
+
+    void status(const std::string& status)
+    {
+        _status = status;
+    }
+
+    /**
+     *  Object ID, -1 if not object related
+     */
     int oid() const
     {
         return _oid;
@@ -104,6 +129,9 @@ public:
         _oid = oid;
     }
 
+    /**
+     *  Message data, could be empty
+     */
     const std::string& payload() const
     {
         return _payload;
@@ -119,6 +147,8 @@ private:
      *  Message fields
      */
     E _type;
+
+    std::string _status = "-";
 
     int _oid = -1;
 
@@ -154,6 +184,8 @@ int Message<E>::parse_from(const std::string& input, bool decrypt)
     }
 
     buffer.clear();
+
+    is >> _status;
 
     is >> _oid;
 
@@ -223,6 +255,8 @@ int Message<E>::write_to(std::string& out, bool encrypt) const
     }
 
     out = _type_str._to_str(_type);
+    out += ' ';
+    out += _status.empty() ? "-" : _status;
     out += ' ';
     out += std::to_string(_oid);
     out += ' ';

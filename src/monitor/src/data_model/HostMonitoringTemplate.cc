@@ -167,7 +167,13 @@ int HostMonitoringTemplate::from_xml(const std::string& xml_string)
 
 int HostMonitoringTemplate::from_template(const Template &tmpl)
 {
-    if (!tmpl.get("OID", _oid))
+    int tmp;
+    if (tmpl.get("OID", tmp))
+    {
+        _oid = tmp;
+    }
+
+    if (_oid < 0)
     {
         return -1;
     }

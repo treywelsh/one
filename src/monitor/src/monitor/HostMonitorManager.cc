@@ -201,23 +201,13 @@ void HostMonitorManager::stop_host_monitor(int oid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void HostMonitorManager::monitor_host(int oid, Template &tmpl)
+void HostMonitorManager::monitor_host(int oid, bool result, Template &tmpl)
 {
-    string str;
-
     auto host = hpool->get(oid);
 
     if (!host.valid())
     {
         NebulaLog::warn("HMM", "monitor_host: unknown host " + to_string(oid));
-        return;
-    }
-
-    tmpl.get("RESULT", str);
-
-    if (str != "SUCCESS")
-    {
-        // TODO Handle monitor failure
         return;
     }
 
@@ -227,12 +217,21 @@ void HostMonitorManager::monitor_host(int oid, Template &tmpl)
         return;
     }
 
+    if (!result)
+    {
+        // TODO Handle monitor failure
+        NebulaLog::warn("HMM", "monitor_host: FAILURE " + to_string(oid));
+        return;
+    }
+
     HostMonitoringTemplate monitoring;
 
+    monitoring.oid(oid);
     monitoring.timestamp(time(nullptr));
 
     if (monitoring.from_template(tmpl) != 0 || monitoring.oid() == -1)
     {
+        string str;
         NebulaLog::log("MON", Log::ERROR, "Error parsing monitoring template: "
                 + tmpl.to_str(str));
         return;
