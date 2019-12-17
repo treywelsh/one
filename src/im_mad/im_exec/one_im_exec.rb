@@ -60,7 +60,7 @@ class InformationManagerDriver < OpenNebulaDriver
         register_action(:STOP_MONITOR, method('stop_monitor'))
     end
 
-    def start_monitor(hostid, zaction64)
+    def start_monitor(not_used, hostid, zaction64)
         zaction = Base64.decode64(zaction64)
         action  = Zlib::Inflate.inflate(zaction)
 
@@ -79,10 +79,12 @@ class InformationManagerDriver < OpenNebulaDriver
                   :stdin => config,
                   :script_name => 'run_probes')
     rescue StandardError => e
-        send_message(:START_MONITOR, RESULT[:failure], hostid, e.message)
+        msg = Zlib::Deflate.deflate(e.message, Zlib::BEST_COMPRESSION)
+        msg = Base64::encode64(msg).strip.delete("\n")
+        send_message(:START_MONITOR, RESULT[:failure], hostid, msg)
     end
 
-    def stop_monitor(number, host)
+    def stop_monitor(not_used, number, host)
         do_action(@hypervisor.to_s, number, host,
                   :STOPMONITOR,
                   :script_name => 'stop_probes',
@@ -98,8 +100,10 @@ class InformationManagerDriver < OpenNebulaDriver
         cmd = SSHCommand.run(mkdir_cmd, hostname, log_method(hostid))
 
         if cmd.code != 0
-            send_message(action, RESULT[:failure], hostid,
-                         'Could not update remotes')
+
+            msg = Zlib::Deflate.deflate('Could not update remotes', Zlib::BEST_COMPRESSION)
+            msg = Base64::encode64(msg).strip.delete("\n")
+            send_message(action, RESULT[:failure], hostid, msg)
             return
         end
 
@@ -113,8 +117,10 @@ class InformationManagerDriver < OpenNebulaDriver
         cmd = LocalCommand.run(sync_cmd, log_method(hostid))
 
         if cmd.code != 0
-            send_message(action, RESULT[:failure], hosid,
-                         'Could not update remotes')
+
+            msg = Zlib::Deflate.deflate('Could not update remotes', Zlib::BEST_COMPRESSION)
+            msg = Base64::encode64(msg).strip.delete("\n")
+            send_message(action, RESULT[:failure], hostid, msg)
             return
         end
     end
