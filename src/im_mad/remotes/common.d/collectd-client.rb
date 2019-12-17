@@ -27,126 +27,109 @@ require 'openssl'
 
 require 'rexml/document'
 
-DIRNAME = File.dirname(__FILE__)
 
-class CollectdClient
+#  This class represents a monitord client. It handles udp and tcp connections
+#  and send update messages to monitord
+#
+class MonitorClient
 
-    def initialize(host, port, probe_args)
-        open_socket(host, port)
-        init_keys
+    # Defined in src/monitor/include/MonitorDriverMessages.h
+    MESSAGE_TYPES = %w[MONITOR_VM MONITOR_HOST SYSTEM_HOST STATE_VM
+                       START_MONITOR STOP_MONITOR].freeze
 
-        probe_info(probe_args)
+    MESSAGE_STATUS = { true =>'SUCCESS', false => 'FAILURE' }.freeze
 
-        @last_update = last_update
+    MESSAGE_TYPES.each do |mt|
+        define_method(mt.downcase.to_sym) do |rc, payload|
+            msg = "#{mt} #{MESSAGE_STATUS[rc]} #{@hostid} #{pack(payload)}"
+            @socket_udp.send(msg, 0)
+        rescue StandardError
+        end
     end
 
-    def send(data, protocol, secure = true)
-        message, code = data
-        code ? result = 'SUCCESS' : result = 'FAILURE'
+    # Options to create a monitord client
+    # :host [:String] to send the messages to
+    # :port [:String] of monitord server
+    # :hostid [:String] OpenNebula ID of this host
+    # :pubkey [:String] public key to encrypt messages
+    def initialize(server, port, id, opt = {})
+        @opts = {
+            :pubkey => ''
+        }.merge opt
 
-        message = "MONITOR #{result} #{@retries} #{message}\n"
-        message = encrypt(message) if secure == true
+        addr = Socket.getaddrinfo(server, port)[0]
 
-        socket = @socket_udp
-        socket = @socket_tcp if protocol == 'tcp'
+        @socket_udp = UDPSocket.new(addr[0])
+        @socket_udp.connect(addr[3], addr[1])
 
-        socket.send(message, 0)
-    end
+        if @opts[:pubkey].empty?
+            @pubkey = nil
+        else
+            @pubkey = OpenSSL::PKey::RSA.new @opts[:pubkey]
+        end
 
-    # Runs the specifed probes and sends the data
-    def monitor(probes, push_period, protocol)
-        before = Time.now
-
-        exit 0 if last_update != @last_update
-
-        data = run_probes(probes)
-        client.send(data, protocol, cache)
-
-        # Sleep during the Cycle
-        happened = (Time.now - before).to_i
-        sleep_time = push_period - happened
-        sleep sleep_time if sleep_time < 0
+        @hostid = id
     end
 
     private
 
-    # TODO: Get keys from STDIN
-    def init_keys
-        ssh_conf = "#{ENV['HOME']}/.ssh"
-
-        key_pub = 'id_rsa.pub'
-        key_priv = "#{ssh_conf}/id_rsa"
-        key_pem = "#{ssh_conf}/#{key_pub}.pem"
-        key_pub.prepend "#{ssh_conf}/"
-
-        gen_pem = "ssh-keygen -f #{key_pub} -e -m pem > #{key_pem}"
-
-        `#{gen_pem}` unless File.file?(key_pem)
-
-        @key_pub = OpenSSL::PKey::RSA.new File.read key_pem
-        @key_priv = OpenSSL::PKey::RSA.new File.read key_priv
-    end
-
-    def encrypt(message)
-        @key_pub.public_encrypt(message)
-    end
-
-    def decrypt(message)
-        @key_priv.private_decrypt(message)
-    end
-
-    def probe_info(arguments)
-        @probe_args = arguments
-
-        cmd = File.join(DIRNAME, '..', 'run_probes')
-        @run_probes_cmd = "#{cmd} #{arguments[:hypervisor]}-probes.d"
-    end
-
-    def probe_cmd(dir)
-        cmd = "#{@run_probes_cmd}/#{dir}"
-
-        Open3.capture2e(cmd, :stdin_data => @probe_args.to_yaml)
-    end
-
-    def run_probes(dir)
-        data, code = probe_cmd(dir, push_period)
-
+    # Formats message payload to send over the wire
+    def pack(data)
         zdata  = Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
-        data64 = Base64.encode64(zdata).strip.delete("\n")
+        data64 = Base64.strict_encode64(zdata)
 
-        [data64, code]
+        if @pubkey
+            @key_pub.public_encrypt(data64)
+        else
+            data64
+        end
     end
 
-    def ipv4_address(host)
-        addresses = Resolv.getaddresses(host)
-        address = nil
+end
 
-        addresses.each do |addr|
-            begin
-                a = IPAddr.new(addr)
-                if a.ipv4?
-                    address = addr
-                    break
-                end
-            rescue StandardError
-            end
+#  This class wraps the execution of a probe directory and sends data to
+#  monitord (optionally)
+#
+class ProbeRunner
+
+    def initialize(hyperv, path)
+        @path = File.join(File.dirname(__FILE__), '..', "#{hyperv}-probes.d",
+                          path)
+    end
+
+    def run_probes
+        cwd_bck = Dir.pwd
+        Dir.chdir(@path)
+
+        data = ''
+
+        Dir.each_child(@path) do |probe|
+            next unless File.executable?(probe)
+
+            data += `./#{probe} 2>&1`
+
+            return [-1, "Error executing #{probe}"] if $?.exitstatus != 0
         end
 
-        address
+        Dir.chdir(cwd_bck)
+
+        [0, data]
     end
 
-    def open_sockets(host, port)
-        ip = ipv4_address(host)
+    def self.monitor_loop(hyperv, path, period, &block)
+        runner = ProbeRunner.new(hyperv, path)
 
-        @socket_udp = UDPSocket.new
-        @socket_udp.bind(ip, port)
+        loop do
+            ts = Time.now
 
-        @socket_tcp = TCPSocket.new
-        @socket_tcp.bind(ip, port)
-    end
+            rc, data = runner.run_probes
 
-    def last_update
-        File.stat(REMOTE_DIR_UPDATE).mtime.to_i rescue 0
+            block.call(rc, data)
+
+            run_time = (Time.now - ts).to_i
+
+            sleep(period.to_i - run_time) if period.to_i > run_time
+        end
     end
 
 end
@@ -154,31 +137,28 @@ end
 #-------------------------------------------------------------------------------
 # Configuration (from monitord)
 #-------------------------------------------------------------------------------
-xml_txt    = STDIN.read
-probe_args = {}
+xml_txt = STDIN.read
 
 begin
-    config_xml = REXML::Document.new(xml_txt).root
+    config = REXML::Document.new(xml_txt).root
 
-    host   = config_xml.elements['UDP_LISTENER/MONITOR_ADDRESS'].text.to_s
-    port   = config_xml.elements['UDP_LISTENER/PORT'].text.to_s
-    pubkey = config_xml.elements['UDP_LISTENER/PUBKEY'].text.to_s
+    host   = config.elements['UDP_LISTENER/MONITOR_ADDRESS'].text.to_s
+    port   = config.elements['UDP_LISTENER/PORT'].text.to_s
+    pubkey = config.elements['UDP_LISTENER/PUBKEY'].text.to_s
     hyperv = ARGV[0]
 
-    probe_args = {
-        :host => host,
-        :port => port,
-        :pubkey => pubkey,
-        :hypervisor => hyperv
+    probes = {
+        :system_host => {
+            :period => config.elements['PROBE_PERIOD/SYSTEM_HOST'].text.to_s, 
+            :path => 'host/system'
+        },
+
+        :monitor_host => {
+            :period => config.elements['PROBE_PERIOD/MONITOR_HOST'].text.to_s, 
+            :path => 'host/system'
+        }
     }
 
-    periods = {
-        :hs => config_xml.elements['PROBE_PERIOD/HS'].text.to_i,
-        :hm => config_xml.elements['PROBE_PERIOD/HI'].text.to_i,
-        :vms => config_xml.elements['PROBE_PERIOD/VMS'].text.to_i,
-        :vmm => config_xml.elements['PROBE_PERIOD/VMM'].text.to_i,
-        :ds => config_xml.elements['PROBE_PERIOD/DS'].text.to_i
-    }
 rescue StandardError => e
     puts e.inspect
     exit(-1)
@@ -187,22 +167,25 @@ end
 #-------------------------------------------------------------------------------
 # Run configuration probes and send information to monitord
 #-------------------------------------------------------------------------------
-client = CollectdClient.new(host, port, probe_args)
+client = MonitorClient.new(host, port, 0, :pubkey => pubkey)
 # TODO: execute host/system + datastore/monitor
+# TODO: get host id from probe arguments
 
 #-------------------------------------------------------------------------------
 # Start monitor threads and shepherd
 #-------------------------------------------------------------------------------
 threads = []
-threads << Thread.new { client.monitor('host/system', periods[:hs], 'tcp') }
-threads << Thread.new { client.monitor('host/monitor', periods[:hm], 'udp') }
-threads << Thread.new { client.monitor('vms/status', periods[:vms], 'tcp') }
-threads << Thread.new { client.monitor('vms/monitor', periods[:vmm], 'udp') }
-threads << Thread.new { client.monitor('datastore/monitor', periods[:ds], 'tcp') }
 
-threads << Thread.new do # TODO: decide which period
-    sleep periods[:hs]
-    `#{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd.sh`
+probes.each do |msg_type, conf|
+    threads << Thread.new { 
+        ProbeRunner.monitor_loop(hyperv, conf[:path], conf[:period]) do |rc, da|
+            client.send(msg_type, rc, da)
+        end
+    }
 end
 
+threads << Thread.new do # TODO: decide which period
+    sleep 60
+    `#{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd.sh`
+end
 threads.each {|thr| thr.join }
