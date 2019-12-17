@@ -149,13 +149,13 @@ begin
 
     probes = {
         :system_host => {
-            :period => config.elements['PROBE_PERIOD/SYSTEM_HOST'].text.to_s, 
+            :period => config.elements['PROBE_PERIOD/SYSTEM_HOST'].text.to_s,
             :path => 'host/system'
         },
 
         :monitor_host => {
-            :period => config.elements['PROBE_PERIOD/MONITOR_HOST'].text.to_s, 
-            :path => 'host/system'
+            :period => config.elements['PROBE_PERIOD/MONITOR_HOST'].text.to_s,
+            :path => 'host/monitor'
         }
     }
 
