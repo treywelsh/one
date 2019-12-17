@@ -16,60 +16,35 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-require_relative '../lib/numa_common'
+require_relative '../../../lib/numa_common'
 
 module NUMA
 
     def self.node_to_template(node, nid)
-        huge = []
-        cores = {}
-        memory = {}
+        node_s = ''
 
         node.each do |k, v|
             case k
             when 'hugepages'
                 v.each do |h|
-                    huge << { :size => h['size'], :pages => h['nr'] }
+                    node_s << "HUGEPAGE = [ NODE_ID = \"#{nid}\","
+                    node_s << " SIZE = \"#{h['size']}\","
+                    node_s << " PAGES = \"#{h['nr']}\" ]\n"
                 end
             when 'cores'
                 v.each do |c|
-                    tag = (c['id']).to_s
-
-                    cores[tag] = [] unless cores[tag]
-
-                    cores[tag] << c['cpus'].join(',')
+                    node_s << "CORE = [ NODE_ID = \"#{nid}\","
+                    node_s << " ID = \"#{c['id']}\","
+                    node_s << " CPUS = \"#{c['cpus'].join(',')}\" ]\n"
                 end
             when 'memory'
-                memory.merge!(:distance => v['distance'], :total => v['total'])
+                node_s << "MEMORY_NODE = [ NODE_ID = \"#{nid}\","
+                node_s << " TOTAL = \"#{v['total']}\","
+                node_s << " DISTANCE = \"#{v['distance']}\" ]\n"
             end
         end
 
-        builder = Nokogiri::XML::Builder.new do |xml|
-            xml.NODE {
-                xml.ID nid
-
-                huge.each do |h|
-                    xml.HUGEPAGE {
-                        xml.SIZE h[:size]
-                        xml.PAGES h[:pages]
-                    }
-                end
-
-                cores.each do |id, cpus|
-                    xml.CORE {
-                        xml.ID id
-                        xml.CPUS cpus.join(',')
-                    }
-                end
-
-                xml.MEMORY {
-                    xml.DISTANCE memory[:distance]
-                    xml.TOTAL memory[:total]
-                }
-            }
-        end
-
-        builder.doc.root.to_xml
+        node_s
     end
 
     # --------------------------------------------------------------------------
@@ -111,6 +86,30 @@ module NUMA
     end
 
 end
+
+# ------------------------------------------------------------------------------
+# Get information for each NUMA node.
+# ------------------------------------------------------------------------------
+nodes = {}
+
+Dir.foreach(NUMA::NODE_PATH) do |node|
+    /node(?<node_id>\d+)/ =~ node
+    next unless node_id
+
+    nodes[node_id] = {}
+
+    NUMA.huge_pages(nodes, node_id)
+
+    NUMA.cpu_topology(nodes, node_id)
+
+    NUMA.memory(nodes, node_id)
+end
+
+nodes_s = ''
+
+nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
+
+puts nodes_send
 
 # ------------------------------------------------------------------------------
 # Get information for each NUMA node.

@@ -16,44 +16,29 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
-require_relative '../lib/numa_common'
+require_relative '../../../lib/numa_common'
 
 module NUMA
 
     def self.node_to_template(node, nid)
-        huge = []
-        memory = {}
+        node_s = ''
 
         node.each do |k, v|
             case k
             when 'hugepages'
                 v.each do |h|
-                    huge << { :size => h['size'], :free => h['free'] }
+                    node_s << "HUGEPAGE = [ NODE_ID = \"#{nid}\","
+                    node_s << " SIZE = \"#{h['size']}\","
+                    node_s << " FREE = \"#{h['free']}\" ]\n"
                 end
             when 'memory'
-                memory.merge!(:free => v['free'], :used => v['used'])
+                node_s << "MEMORY_NODE = [ NODE_ID = \"#{nid}\","
+                node_s << " FREE = \"#{v['free']}\","
+                node_s << " USED = \"#{v['used']}\" ]\n"
             end
         end
 
-        builder = Nokogiri::XML::Builder.new do |xml|
-            xml.NODE {
-                xml.ID nid
-
-                huge.each do |h|
-                    xml.HUGEPAGE {
-                        xml.SIZE h[:size]
-                        xml.FREE h[:free]
-                    }
-                end
-
-                xml.MEMORY {
-                    xml.FREE memory[:free]
-                    xml.USED memory[:used]
-                }
-            }
-        end
-
-        builder.doc.root.to_xml
+        node_s
     end
 
 end
@@ -65,6 +50,20 @@ nodes = {}
 
 Dir.foreach(NUMA::NODE_PATH) do |node|
     /node(?<node_id>\d+)/ =~ node
+    next unless node_id
+
+    nodes[node_id] = {}
+
+    NUMA.huge_pages(nodes, node_id)
+
+    NUMA.memory(nodes, node_id)
+end
+
+nodes_s = ''
+
+nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
+
+puts nodes_s    /node(?<node_id>\d+)/ =~ node
     next unless node_id
 
     nodes[node_id] = {}
