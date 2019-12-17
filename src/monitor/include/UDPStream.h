@@ -17,13 +17,16 @@
 #ifndef UDP_STREAM_H
 #define UDP_STREAM_H
 
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 #include <unistd.h>
 #include <sys/select.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
+
 #include <atomic>
 #include <vector>
 
@@ -81,7 +84,7 @@ private:
 
     std::string _address;
 
-    short unsigned int _port;
+    unsigned int _port;
 
     std::vector<std::thread> listener_threads;
 
@@ -96,13 +99,26 @@ private:
 template<typename E>
 int UDPStream<E>::action_loop(int threads, std::string& error)
 {
-    struct sockaddr_in udp_server;
-    int rc;
+    struct addrinfo hints;
+    struct addrinfo *res;
+
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_flags    = AI_PASSIVE; //0.0.0.0 or ::
+    hints.ai_socktype = SOCK_DGRAM;
+
+    int rc = getaddrinfo(_address.c_str(), std::to_string(_port).c_str(), &hints, &res);
+
+    if ( rc != 0 )
+    {
+        error = gai_strerror(rc);
+        return -1;
+    }
 
     /* ---------------------------------------------------------------------- */
     /* Create UDP socket for incoming driver messages                         */
     /* ---------------------------------------------------------------------- */
-    _socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    _socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
     if ( _socket < 0 )
     {
@@ -110,20 +126,9 @@ int UDPStream<E>::action_loop(int threads, std::string& error)
         return -1;
     }
 
-    udp_server.sin_family = AF_INET;
-    udp_server.sin_port   = htons(_port);
+    rc = bind(_socket, res->ai_addr, res->ai_addrlen);
 
-    if (_address == "0.0.0.0")
-    {
-        udp_server.sin_addr.s_addr = htonl (INADDR_ANY);
-    }
-    else if (inet_pton(AF_INET, _address.c_str(), &udp_server.sin_addr.s_addr) < 0)
-    {
-        error = strerror(errno);
-        return -1;
-    }
-
-    rc = bind(_socket, (struct sockaddr *) &udp_server, sizeof(struct sockaddr_in));
+    freeaddrinfo(res);
 
     if ( rc < 0 )
     {
@@ -177,10 +182,11 @@ int UDPStream<E>::read_line(std::string& line)
 {
     char   buffer[MESSAGE_SIZE];
 
-    struct sockaddr addr;
-    socklen_t addr_size = sizeof(struct sockaddr);
+    struct sockaddr_storage addr;
+    socklen_t addr_size = sizeof(struct sockaddr_storage);
 
-    ssize_t rc = recvfrom(_socket, buffer, MESSAGE_SIZE, 0, &addr, &addr_size);
+    ssize_t rc = recvfrom(_socket, buffer, MESSAGE_SIZE, 0,
+            (struct sockaddr *) &addr, &addr_size);
 
     if (rc > 0 && rc < MESSAGE_SIZE)
     {
