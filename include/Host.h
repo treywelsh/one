@@ -87,9 +87,9 @@ public:
         return 0;
     }
 
-    static string& state_to_str(std::string& st, HostState state)
+    static string state_to_str(HostState state)
     {
-        st = "";
+        string st = "";
 
         switch (state)
         {
