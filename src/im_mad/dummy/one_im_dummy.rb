@@ -37,7 +37,7 @@ $LOAD_PATH << RUBY_LIB_LOCATION
 require 'OpenNebulaDriver'
 require 'CommandManager'
 require 'base64'
-
+require 'zlib'
 
 # The SSH Information Manager Driver
 class DummyInformationManager < OpenNebulaDriver
@@ -50,16 +50,16 @@ class DummyInformationManager < OpenNebulaDriver
         )
 
         # register actions
-        register_action(:MONITOR, method("action_monitor"))
-        register_action(:STOPMONITOR, method("stop_monitor"))
+        register_action(:START_MONITOR, method("action_monitor"))
+        register_action(:STOP_MONITOR, method("stop_monitor"))
     end
 
     # Execute the sensor array in the remote host
-    def action_monitor(number, host, not_used1, not_used2)
-        results =  "HYPERVISOR=dummy\n"
-        results << "HOSTNAME=#{host}\n"
+    def action_monitor(notused, hostid, zaction64)
+        results = "HYPERVISOR=dummy\n"
+        # results << "HOSTNAME=#{host}\n"
 
-        results << "CPUSPEED=2.2GHz\n"
+        results << "CPUSPEED=2.3GHz\n"
 
         used_memory = rand(16777216)
         results << "TOTALMEMORY=16777216\n"
@@ -126,13 +126,14 @@ class DummyInformationManager < OpenNebulaDriver
 
         make_topology(results, 2, 8, [2048, 1048576], 4, 16777216)
 
+        results = Zlib::Deflate.deflate(results, Zlib::BEST_COMPRESSION)
         results = Base64::encode64(results).strip.delete("\n")
 
-        send_message("MONITOR", RESULT[:success], number, results)
+        send_message("MONITOR_HOST", RESULT[:success], hostid, results)
     end
 
-    def stop_monitor(number, host)
-        send_message("STOPMONITOR", RESULT[:success], number, nil)
+    def stop_monitor(notused, number, host)
+        send_message("STOP_MONITOR", RESULT[:success], number, "")
     end
 
     def make_topology(result, nodes, cores, pages, threads, mem)
