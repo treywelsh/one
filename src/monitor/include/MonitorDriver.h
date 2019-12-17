@@ -49,6 +49,12 @@ public:
 
         register_action(MonitorDriverMessages::STATE_VM,
                 &MonitorDriverProtocol::_state_vm);
+
+        register_action(MonitorDriverMessages::START_MONITOR,
+                &MonitorDriverProtocol::_start_monitor);
+
+        register_action(MonitorDriverMessages::LOG,
+                &MonitorDriverProtocol::_log);
     };
 
     void start_monitor(int oid, const std::string& host_xml)

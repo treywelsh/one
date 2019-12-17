@@ -35,7 +35,8 @@ const EString<MonitorDriverMessages> Message<MonitorDriverMessages>::_type_str({
     {"SYSTEM_HOST", MonitorDriverMessages::SYSTEM_HOST},
     {"STATE_VM", MonitorDriverMessages::STATE_VM},
     {"START_MONITOR", MonitorDriverMessages::START_MONITOR},
-    {"STOP_MONITOR", MonitorDriverMessages::STOP_MONITOR}
+    {"STOP_MONITOR", MonitorDriverMessages::STOP_MONITOR},
+    {"LOG", MonitorDriverMessages::LOG}
 });
 
 template<>

@@ -65,6 +65,9 @@ void MonitorDriverProtocol::_monitor_host(message_t msg)
     hm->monitor_host(msg->oid(), result, tmpl);
 }
 
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 void MonitorDriverProtocol::_system_host(message_t msg)
 {
 
@@ -76,6 +79,38 @@ void MonitorDriverProtocol::_system_host(message_t msg)
 void MonitorDriverProtocol::_state_vm(message_t msg)
 {
 
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void MonitorDriverProtocol::_start_monitor(message_t msg)
+{
+    if (msg->status() != "SUCCESS")
+    {
+        hm->start_monitor_failure(msg->oid());
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void MonitorDriverProtocol::_log(message_t msg)
+{
+    auto log_type = Log::INFO;
+    switch (msg->status()[0])
+    {
+            case 'E':
+                log_type = Log::ERROR;
+                break;
+            case 'W':
+                log_type = Log::WARNING;
+                break;
+            case 'D':
+                log_type = Log::DEBUG;
+                break;
+    }
+    NebulaLog::log("MDP", log_type, msg->payload());
 }
 
 /* -------------------------------------------------------------------------- */

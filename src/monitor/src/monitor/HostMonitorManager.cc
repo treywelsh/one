@@ -132,9 +132,8 @@ void HostMonitorManager::update_host(int oid, const std::string &xml)
     {
         host->from_xml(xml);
 
-        string str_state;
         NebulaLog::debug("HMM", "Updated Host " + to_string(host->oid())
-            + ", state " + Host::state_to_str(str_state, host->state()));
+            + ", state " + Host::state_to_str(host->state()));
     }
     else
     {
@@ -219,8 +218,14 @@ void HostMonitorManager::monitor_host(int oid, bool result, Template &tmpl)
 
     if (!result)
     {
-        // TODO Handle monitor failure
-        NebulaLog::warn("HMM", "monitor_host: FAILURE " + to_string(oid));
+        NebulaLog::error("HMM", "Monitor host failed id:" + to_string(oid));
+
+        if (host->state() != Host::OFFLINE && host->state() != Host::DISABLED )
+        {
+            oned_driver->host_state(oid, Host::state_to_str(Host::HostState::ERROR));
+            // TODO Set template error message
+        }
+
         return;
     }
 
@@ -252,11 +257,26 @@ void HostMonitorManager::monitor_host(int oid, bool result, Template &tmpl)
     if (host->state() != Host::HostState::MONITORED &&
         host->state() != Host::HostState::DISABLED)
     {
-        string state;
-        Host::state_to_str(state, Host::HostState::MONITORED);
-
-        oned_driver->host_state(oid, state);
+        oned_driver->host_state(oid, Host::state_to_str(Host::HostState::MONITORED));
     }
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+void HostMonitorManager::start_monitor_failure(int oid)
+{
+    NebulaLog::error("HMM", "Unable to monitor host id: " + to_string(oid));
+
+    auto host = hpool->get(oid);
+
+    if (!host.valid() || host->state() == Host::HostState::OFFLINE)
+    {
+        return;
+    }
+
+    oned_driver->host_state(oid, Host::state_to_str(Host::HostState::ERROR));
+
+    return;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -354,71 +374,3 @@ void HostMonitorManager::start_host_monitor(const HostRPCPool::HostBaseLock& hos
 }
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
-/*
-void MonitorDriver::thread_execute()
-{
-    // Initial pull from oned
-    if (pull_from_oned())
-    {
-        NebulaLog::info("MON", "Succesfully connected to oned");
-    }
-    else
-    {
-        NebulaLog::error("MON", "Unable to connect to oned!");
-    }
-
-    // Replace this loop with some timer action,
-    // which should do the monitoring logic
-    while (!terminate)
-    {
-        const auto& hosts = hpool->get_objects();
-        NebulaLog::log("MON", Log::INFO, "Number of hosts = " + to_string(hosts.size()));
-        for (const auto& o : hosts)
-        {
-            NebulaLog::log("MON", Log::INFO, "\t" + o.second->name());
-        }
-
-        // vmpool->update();
-        // auto vms = vmpool->get_objects();
-        // NebulaLog::log("MON", Log::INFO, "Number of VMs = " + to_string(vms.size()));
-        // for (auto o : vms)
-        // {
-        //     NebulaLog::log("MON", Log::INFO, "\t" + o.second->get_name());
-        // }
-
-        sleep(5);
-    }
-
-    for (auto& host : hpool->get_objects())
-    {
-        auto h = static_cast<HostBase*>(host.second.get());
-        dm->stop_monitor(h->oid(), h->name(), h->im_mad());
-    }
-}
-*/
-
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-/*
-bool MonitorDriver::pull_from_oned()
-{
-    int oned_connected = -1;
-    int retries = 5;
-    do
-    {
-        sleep(2);
-        oned_connected = hpool->update();
-        if (oned_connected != 0 && retries-- > 0)
-        {
-            NebulaLog::warn("MON", "Unable to connect to oned, trying again");
-        }
-    } while (oned_connected != 0 && retries > 0);
-
-    for (auto& host : hpool->get_objects())
-    {
-        dm->start_monitor(static_cast<HostBase*>(host.second.get()), true);
-    }
-
-    return oned_connected == 0;
-}
-*/

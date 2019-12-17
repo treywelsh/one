@@ -36,6 +36,10 @@ public:
 
     static void _state_vm(message_t msg);
 
+    static void _start_monitor(message_t msg);
+
+    static void _log(message_t msg);
+
     static HostMonitorManager * hm;
 };
 

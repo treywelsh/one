@@ -98,6 +98,12 @@ public:
     void monitor_host(int oid, bool result, Template &tmpl);
 
     /**
+     *  Receive start monitor failure from driver
+     *    @param oid host id
+     */
+    void start_monitor_failure(int oid);
+
+    /**
      *  This function is executed periodically to update host monitor status
      */
     void timer_action();
