@@ -15,12 +15,29 @@
 #--------------------------------------------------------------------------- #
 
 module OpenNebula
-    class ServicePool < DocumentPoolJSON
+
+    # ServicePool class
+    class OpenNebulaServicePool < DocumentPoolJSON
 
         DOCUMENT_TYPE = 100
 
+        def initialize(client, user_id = -1)
+            super(client, user_id)
+        end
+
+        def factory(element_xml)
+            service = OpenNebula::Service.new(element_xml, @client)
+            service.load_body
+            service
+        end
+
+    end
+
+    # ServicePool class
+    class ServicePool
+
         @@mutex      = Mutex.new
-        @@mutex_hash = Hash.new
+        @@mutex_hash = {}
 
         # Class constructor
         #
@@ -29,14 +46,36 @@ module OpenNebula
         #   http://opennebula.org/documentation:rel3.6:api
         #
         # @return [DocumentPool] the new object
-        def initialize(client, user_id=-1)
-            super(client, user_id)
+        def initialize(cloud_auth, client)
+            # TODO, what if cloud_auth is nil?
+            @cloud_auth = cloud_auth
+            @client = client
+            @one_pool = nil
         end
 
-        def factory(element_xml)
-            service = OpenNebula::Service.new(element_xml, @client)
-            service.load_body
-            service
+        def client
+            # If there's a client defined use it
+            return @client unless @client.nil?
+
+            # If not, get one via cloud_auth
+            @cloud_auth.client
+        end
+
+        def info
+            osp = OpenNebulaServicePool.new(client)
+            osp.info
+
+            @one_pool = osp
+        end
+
+        def to_json
+            @one_pool.to_json
+        end
+
+        def each(&block)
+            return if @one_pool.nil?
+
+            @one_pool.each(&block)
         end
 
         # Retrieves a Service element from OpenNebula. The Service::info()
@@ -47,9 +86,17 @@ module OpenNebula
         #   The mutex will be unlocked after the block execution.
         #
         # @return [Service, OpenNebula::Error] The Service in case of success
-        def get(service_id, &block)
+        def get(service_id, external_client = nil, &block)
             service_id = service_id.to_i if service_id
-            service = Service.new_with_id(service_id, @client)
+            aux_client = nil
+
+            if external_client.nil?
+                aux_client = client
+            else
+                aux_client = external_client
+            end
+
+            service = Service.new_with_id(service_id, aux_client)
 
             if block_given?
                 obj_mutex = nil

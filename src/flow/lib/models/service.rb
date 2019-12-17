@@ -34,7 +34,7 @@ module OpenNebula
             'FAILED_DEPLOYING'   => 7,
             'SCALING'            => 8,
             'FAILED_SCALING'     => 9,
-            'COOLDOWN'           => 10,
+            'COOLDOWN'           => 10
         }
 
         STATE_STR = %w[
@@ -49,13 +49,27 @@ module OpenNebula
             SCALING
             FAILED_SCALING
             COOLDOWN
-            DELETING
-            FAILED_DELETING
         ]
 
         TRANSIENT_STATES = %w[
             DEPLOYING
             UNDEPLOYING
+            SCALING
+        ]
+
+        RECOVER_DEPLOY_STATES = %w[
+            FAILED_DEPLOYING
+            DEPLOYING
+            PENDING
+        ]
+
+        RECOVER_UNDEPLOY_STATES = %w[
+            FAILED_UNDEPLOYING
+            UNDEPLOYING
+        ]
+
+        RECOVER_SCALE_STATES = %w[
+            FAILED_SCALING
             SCALING
         ]
 
@@ -79,8 +93,22 @@ module OpenNebula
             STATE_STR[state]
         end
 
+        # Returns true the if the service is in transient state
+        # @return true the if the service is in transient state, false otherwise
         def transient_state?
             TRANSIENT_STATES.include? STATE_STR[state]
+        end
+
+        def can_recover_deploy?
+            RECOVER_DEPLOY_STATES.include? STATE_STR[state]
+        end
+
+        def can_recover_undeploy?
+            RECOVER_UNDEPLOY_STATES.include? STATE_STR[state]
+        end
+
+        def can_recover_scale?
+            RECOVER_SCALE_STATES.include? STATE_STR[state]
         end
 
         # Sets a new state

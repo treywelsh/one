@@ -57,17 +57,18 @@ class EventManager
         :subscriber_endpoint  => 'tcp://localhost:2101',
         :timeout_s   => 30,
         :concurrency => 10,
-        :client      => nil
+        :cloud_auth  => nil,
+        :am          => nil
     }
 
     def initialize(options)
         @conf = DEFAULT_CONF.merge(options)
 
-        @lcm = nil
+        @lcm = options[:lcm]
         @am  = ActionManager.new(@conf[:concurrency], true)
 
         @context = ZMQ::Context.new(1)
-        @client  = @conf[:client]
+        @cloud_auth = @conf[:cloud_auth]
 
         # Register Action Manager actions
         @am.register_action(ACTIONS['WAIT_DEPLOY'], method('wait_deploy_action'))
@@ -202,6 +203,8 @@ class EventManager
 
         rc_nodes = { :successful => [], :failure => [] }
 
+        return [true, rc_nodes] if nodes.empty?
+
         nodes.each do |node|
             subscribe(node, state, lcm_state, subscriber)
         end
@@ -233,7 +236,7 @@ class EventManager
             end
 
             id = retrieve_id(key)
-            Log.error LOG_COMP, "Node #{id} reached (#{state},#{lcm_state})"
+            Log.info LOG_COMP, "Node #{id} reached (#{state},#{lcm_state})"
 
             nodes.delete(id)
             unsubscribe(id, state, lcm_state, subscriber)
@@ -248,7 +251,7 @@ class EventManager
 
         nodes.delete_if do |node|
             vm = OpenNebula::VirtualMachine
-                 .new_with_id(node, @client)
+                 .new_with_id(node, @cloud_auth.client)
 
             vm.info
 

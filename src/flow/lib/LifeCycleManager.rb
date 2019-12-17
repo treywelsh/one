@@ -31,6 +31,10 @@ class ServiceLCM
         'UNDEPLOY' => :undeploy,
         'SCALE'    => :scale,
         'RECOVER'  => :recover,
+        # 'CHOWN'    => :chown,
+        # 'CHMOD'    => :chmod,
+        # 'RENAME'   => :rename,
+        # 'SCHED'    => :sched,
 
         # Callbacks
         'DEPLOY_CB'            => :deploy_cb,
@@ -46,10 +50,16 @@ class ServiceLCM
 
     def initialize(concurrency, cloud_auth)
         @cloud_auth = cloud_auth
-        @client = @cloud_auth.client
-        @event_manager = nil
         @am = ActionManager.new(concurrency, true)
-        @srv_pool = ServicePool.new(@client)
+        @srv_pool = ServicePool.new(@cloud_auth, nil)
+
+        em_conf = {
+            :cloud_auth  => @cloud_auth,
+            :concurrency => 10,
+            :lcm         => @am
+        }
+
+        @event_manager = EventManager.new(em_conf).am
 
         # Register Action Manager actions
         @am.register_action(ACTIONS['DEPLOY'], method('deploy_action'))
@@ -65,12 +75,77 @@ class ServiceLCM
         @am.register_action(ACTIONS['SCALEDOWN_FAILURE_CB'], method('scaledown_failure_cb'))
         @am.register_action(ACTIONS['COOLDOWN_CB'], method('cooldown_cb'))
         @am.register_action(ACTIONS['RECOVER'], method('recover_action'))
+        # @am.register_action(ACTIONS['CHOWN'], method('chown_action'))
+        # @am.register_action(ACTIONS['CHMOD'], method('chmod_action'))
+        # @am.register_action(ACTIONS['RENAME'], method('rename_action'))
+        # @am.register_action(ACTIONS['SCHED'], method('sched_action'))
 
         Thread.new { @am.start_listener }
+
+        Thread.new { catch_up }
     end
 
     ############################################################################
-    # Actions
+    # Directly executed actions
+    ############################################################################
+
+    def chown_action(client, service_id, u_id, g_id)
+        rc = @srv_pool.get(service_id, client) do |service|
+            rc = service.chown(u_id, g_id)
+
+            if OpenNebula.is_error?(rc)
+                rc
+            end
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def chmod_action(client, service_id, octet)
+        rc = @srv_pool.get(service_id, client) do |service|
+            rc = service.chmod_octet(octet)
+
+            if OpenNebula.is_error?(rc)
+                rc
+            end
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def rename_action(client, service_id, new_name)
+        rc = @srv_pool.get(service_id, client) do |service|
+            rc = service.rename(new_name)
+
+            if OpenNebula.is_error?(rc)
+                rc
+            end
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    def sched_action(client, service_id, role_name, action, period, number)
+        rc = @srv_pool.get(service_id, client) do |service|
+            roles = service.roles
+
+            role = roles[role_name]
+
+            if role.nil?
+                break OpenNebula::Error.new("Role '#{role_name}' "\
+                                            'not found')
+            else
+                role.batch_action(action, period, number)
+            end
+        end
+
+        Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
+    end
+
+    private
+
+    ############################################################################
+    # AM Actions
     ############################################################################
     def deploy_action(service_id)
         rc = @srv_pool.get(service_id) do |service|
@@ -119,11 +194,12 @@ class ServiceLCM
         rc = @srv_pool.get(service_id) do |service|
             set_deploy_strategy(service)
 
-            # If the service is in transient state,
-            # stop current action before undeploying the service
-            if service.transient_state?
-                @event_manager.cancel_action(service_id)
-                @am.cancel_action(service_id)
+            if service.transient_state? &&
+               service.state != Service::STATE['UNDEPLOYING']
+                Log.error LOG_COMP, 'Service cannot be undeployed in '\
+                                    "state: #{service.state_str}"
+
+                break
             end
 
             roles = service.roles_shutdown
@@ -173,11 +249,13 @@ class ServiceLCM
             set_cardinality(role, cardinality, force)
 
             if cardinality_diff > 0
+                role.scale_way('UP')
                 rc = deploy_roles({ role_name => role },
                                   'SCALING',
                                   'FAILED_SCALING',
                                   true)
             elsif cardinality_diff < 0
+                role.scale_way('DOWN')
                 rc = undeploy_roles({ role_name => role },
                                     'SCALING',
                                     'FAILED_SCALING',
@@ -197,23 +275,20 @@ class ServiceLCM
     end
 
     def recover_action(service_id)
-        state = ''
-
         # TODO, kill other proceses? (other recovers)
         rc = @srv_pool.get(service_id) do |service|
-            state = service.state
-
-            case state
-            when Service::STATE['FAILED_DEPLOYING']
+            if service.can_recover_deploy?
                 recover_deploy(service)
-            when Service::STATE['FAILED_UNDEPLOYING']
+            elsif service.can_recover_undeploy?
                 recover_undeploy(service)
-            when Service::STATE['FAILED_SCALING']
+            elsif service.can_recover_scale?
                 recover_scale(service)
             else
-                return OpenNebula::Error.new('Recover action is not ' \
+                break OpenNebula::Error.new('Recover action is not ' \
                             "available for state #{service.state_str}")
             end
+
+            service.update
         end
 
         Log.error LOG_COMP, rc.message if OpenNebula.is_error?(rc)
@@ -241,6 +316,9 @@ class ServiceLCM
 
     def deploy_failure_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
+            # stop actions for the service if deploy fails
+            @event_manager.cancel_action(service_id)
+
             service.set_state(Service::STATE['FAILED_DEPLOYING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_DEPLOYING'])
 
@@ -280,6 +358,9 @@ class ServiceLCM
 
     def undeploy_failure_cb(service_id, role_name, nodes)
         rc = @srv_pool.get(service_id) do |service|
+            # stop actions for the service if deploy fails
+            @event_manager.cancel_action(service_id)
+
             service.set_state(Service::STATE['FAILED_UNDEPLOYING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_UNDEPLOYING'])
 
@@ -337,10 +418,11 @@ class ServiceLCM
 
     def scaleup_failure_cb(service_id, role_name)
         rc = @srv_pool.get(service_id) do |service|
+            # stop actions for the service if deploy fails
+            @event_manager.cancel_action(service_id)
+
             service.set_state(Service::STATE['FAILED_SCALING'])
             service.roles[role_name].set_state(Role::STATE['FAILED_SCALING'])
-
-            service.roles[role_name].scale_way('UP')
 
             service.update
         end
@@ -350,6 +432,9 @@ class ServiceLCM
 
     def scaledown_failure_cb(service_id, role_name, nodes)
         rc = @srv_pool.get(service_id) do |service|
+            # stop actions for the service if deploy fails
+            @event_manager.cancel_action(service_id)
+
             role = service.roles[role_name]
 
             service.set_state(Service::STATE['FAILED_SCALING'])
@@ -359,8 +444,6 @@ class ServiceLCM
                 !nodes[:failure].include?(node['deploy_id']) &&
                     nodes[:successful].include?(node['deploy_id'])
             end
-
-            role.scale_way('DOWN')
 
             service.update
         end
@@ -383,7 +466,19 @@ class ServiceLCM
     # Helpers
     ############################################################################
 
-    private
+    # Iterate through the services for catching up with the state of each servic
+    # used when the LCM starts
+    def catch_up
+        Log.error LOG_COMP, 'Catching up...'
+
+        @srv_pool.info
+
+        @srv_pool.each do |service|
+            if service.transient_state?
+                am.trigger_action(:recover, service.id, service.id)
+            end
+        end
+    end
 
     # Returns the deployment strategy for the given Service
     # @param [Service] service the service
@@ -445,7 +540,7 @@ class ServiceLCM
         end
 
         roles.each do |_name, role|
-            rc = role.shutdown
+            rc = role.shutdown(false)
 
             if !rc[0]
                 role.set_state(Role::STATE[error_state])
@@ -476,11 +571,9 @@ class ServiceLCM
 
     def recover_deploy(service)
         service.roles.each do |name, role|
-            next if role.state != Role::STATE['FAILED_DEPLOYING']
+            next unless role.can_recover_deploy?
 
             nodes = role.recover_deploy
-
-            next if nodes.empty?
 
             @event_manager.trigger_action(:wait_deploy,
                                           service.id,
@@ -492,11 +585,9 @@ class ServiceLCM
 
     def recover_undeploy(service)
         service.roles.each do |name, role|
-            next if role.state != Role::STATE['FAILED_UNDEPLOYING']
+            next unless role.can_recover_undeploy?
 
             nodes = role.recover_undeploy
-
-            next if nodes.empty?
 
             @event_manager.trigger_action(:wait_undeploy,
                                           service.id,
@@ -508,11 +599,9 @@ class ServiceLCM
 
     def recover_scale(service)
         service.roles.each do |name, role|
-            next if role.state != Role::STATE['FAILED_SCALING']
+            next unless role.can_recover_scale?
 
             nodes, up = role.recover_scale
-
-            next if nodes.empty?
 
             if up
                 action = :wait_scaleup

@@ -59,9 +59,7 @@ module OpenNebula
             'FAILED_DEPLOYING'   => 7,
             'SCALING'            => 8,
             'FAILED_SCALING'     => 9,
-            'COOLDOWN'           => 10,
-            'DELETING'           => 11,
-            'FAILED_DELETING'    => 12
+            'COOLDOWN'           => 10
         }
 
         STATE_STR = %w[
@@ -76,8 +74,22 @@ module OpenNebula
             SCALING
             FAILED_SCALING
             COOLDOWN
-            DELETING
-            FAILED_DELETING
+        ]
+
+        RECOVER_DEPLOY_STATES = %w[
+            FAILED_DEPLOYING
+            DEPLOYING
+            PENDING
+        ]
+
+        RECOVER_UNDEPLOY_STATES = %w[
+            FAILED_UNDEPLOYING
+            UNDEPLOYING
+        ]
+
+        RECOVER_SCALE_STATES = %w[
+            FAILED_SCALING
+            SCALING
         ]
 
         SCALE_WAYS = {
@@ -103,6 +115,37 @@ module OpenNebula
         # @return [Integer] the role state
         def state
             @body['state'].to_i
+        end
+
+        def can_recover_deploy?
+            return RECOVER_DEPLOY_STATES.include? STATE_STR[state] if state != STATE['PENDING']
+
+            parents.each do |parent|
+                return false if @service.roles[parent].state != STATE['RUNNING']
+            end
+
+            true
+        end
+
+        def can_recover_undeploy?
+            if !RECOVER_UNDEPLOY_STATES.include? STATE_STR[state]
+                # TODO, check childs if !empty? check if can be undeployed
+                @service.roles.each do |role_name, role|
+                    next if role_name == name
+
+                    if role.parents.include? name
+                        return false if role.state != STATE['DONE']
+                    end
+                end
+            end
+
+            true
+        end
+
+        def can_recover_scale?
+            return false unless RECOVER_SCALE_STATES.include? STATE_STR[state]
+
+            true
         end
 
         # Returns the role parents
@@ -393,14 +436,14 @@ module OpenNebula
         # @return [Array<true, nil>, Array<false, String>] true if all the VMs
         # were terminated, false and the error reason if there was a problem
         # shutting down the VMs
-        def shutdown
+        def shutdown(recover)
             if nodes.size != cardinality
                 n_nodes = nodes.size - cardinality
             else
                 n_nodes = nodes.size
             end
 
-            rc = shutdown_nodes(nodes, n_nodes)
+            rc = shutdown_nodes(nodes, n_nodes, recover)
 
             return [false, "Error undeploying nodes for role #{id}"] unless rc[0]
 
@@ -466,7 +509,7 @@ module OpenNebula
                 end
             }
 
-            return [true, nil]
+            [true, nil]
         end
 
         # Schedule the given action on all the VMs that belong to the Role
@@ -482,26 +525,32 @@ module OpenNebula
             nodes = @body['nodes']
             now = Time.now.to_i
 
-            do_offset = ( !period.nil? && period.to_i > 0 &&
-                !vms_per_period.nil? && vms_per_period.to_i > 0 )
+            do_offset = (!period.nil? && period.to_i > 0 &&
+                !vms_per_period.nil? && vms_per_period.to_i > 0)
 
             time_offset = 0
 
             nodes.each_with_index do |node, index|
                 vm_id = node['deploy_id']
-                vm = OpenNebula::VirtualMachine.new_with_id(vm_id, @service.client)
+                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
+                                                            @service.client)
+
                 rc = vm.info
 
                 if OpenNebula.is_error?(rc)
-                    msg = "Role #{name} : VM #{vm_id} monitorization failed; #{rc.message}"
+                    msg = "Role #{name} : VM #{vm_id} monitorization failed;"\
+                          " #{rc.message}"
+
                     error_msgs << msg
-                    Log.error LOG_COMP, msg, @service.id()
+
+                    Log.error LOG_COMP, msg, @service.id
+
                     @service.log_error(msg)
                 else
                     ids = vm.retrieve_elements('USER_TEMPLATE/SCHED_ACTION/ID')
 
                     id = 0
-                    if (!ids.nil? && !ids.empty?)
+                    if !ids.nil? && !ids.empty?
                         ids.map! {|e| e.to_i }
                         id = ids.max + 1
                     end
@@ -509,17 +558,22 @@ module OpenNebula
                     tmp_str = vm.user_template_str
 
                     if do_offset
-                        time_offset = (index / vms_per_period.to_i).floor * period.to_i
+                        offset = (index / vms_per_period.to_i).floor
+                        time_offset = offset * period.to_i
                     end
 
-                    tmp_str << "\nSCHED_ACTION = "<<
-                        "[ID = #{id}, ACTION = #{action}, TIME = #{now + time_offset}]"
+                    tmp_str << "\nSCHED_ACTION = [ID = #{id},ACTION = "\
+                               "#{action}, TIME = #{now + time_offset}]"
 
                     rc = vm.update(tmp_str)
                     if OpenNebula.is_error?(rc)
-                        msg = "Role #{name} : VM #{vm_id} error scheduling action; #{rc.message}"
+                        msg = "Role #{name} : VM #{vm_id} error scheduling "\
+                              "action; #{rc.message}"
+
                         error_msgs << msg
-                        Log.error LOG_COMP, msg, @service.id()
+
+                        Log.error LOG_COMP, msg, @service.id
+
                         @service.log_error(msg)
                     else
                         vms_id << vm.id
@@ -527,15 +581,16 @@ module OpenNebula
                 end
             end
 
-            log_msg = "Action:#{action} scheduled on Role:#{self.name} VMs:#{vms_id.join(',')}"
-            Log.info LOG_COMP, log_msg, @service.id()
+            log_msg = "Action:#{action} scheduled on Role:#{name}"\
+                      "VMs:#{vms_id.join(',')}"
 
-            if error_msgs.empty?
-                return [true, log_msg]
-            else
-                error_msgs << log_msg
-                return [false, error_msgs.join('\n')]
-            end
+            Log.info LOG_COMP, log_msg, @service.id
+
+            return [true, log_msg] if error_msgs.empty?
+
+            error_msgs << log_msg
+
+            [false, error_msgs.join('\n')]
         end
 
         # Returns true if the VM state is failure
@@ -607,29 +662,6 @@ module OpenNebula
             return [0, 0]
         end
 
-        # Scales up or down the number of nodes needed to match the current
-        # cardinality
-        #
-        # @return [Array<true, nil>, Array<false, String>] true if all the VMs
-        # were created/shut down, false and the error reason if there
-        # was a problem
-        def scale()
-            n_nodes = 0
-
-            nodes.each do |node|
-                n_nodes += 1 if node['disposed'] != "1"
-            end
-
-            diff = cardinality - n_nodes
-
-            if diff > 0
-                return deploy(true)
-            elsif diff < 0
-                return shutdown(true)
-            end
-
-            return [true, nil]
-        end
 
         # Updates the duration for the next cooldown
         # @param cooldown_duration [Integer] duration for the next cooldown
@@ -757,7 +789,7 @@ module OpenNebula
                     else
                         deployed_nodes << vm_id
                     end
-                elsif vm_state == '3' && lcm_state == '16' # UNKNOWN
+                else
                     vm.resume
 
                     deployed_nodes << vm_id
@@ -772,56 +804,9 @@ module OpenNebula
         end
 
         def recover_undeploy
-            nodes = @body['nodes']
             undeployed_nodes = []
 
-            nodes.delete_if do |node|
-                vm_id = node['deploy_id']
-
-                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
-                                                            @service.client)
-
-                rc = vm.info
-
-                if OpenNebula.is_error?(rc)
-                    msg = "Role #{name} : Retry failed for VM "\
-                          "#{vm_id}; #{rc.message}"
-                    Log.error LOG_COMP, msg, @service.id
-
-                    next true
-                end
-
-                vm_state = vm.state
-                lcm_state = vm.lcm_state
-
-                next true if vm_state == 6 && lcm_state == 0 # DONE/LCM_INIT
-
-                if Role.vm_failure?(vm_state, lcm_state)
-                    rc = vm.recover(2)
-
-                    if OpenNebula.is_error?(rc)
-                        msg = "Role #{name} : Retry failed for VM "\
-                              "#{vm_id}; #{rc.message}"
-
-                        Log.error LOG_COMP, msg, @service.id
-                        @service.log_error(msg)
-                    else
-                        undeployed_nodes << vm_id
-                    end
-                else
-                    action = @body['shutdown_action']
-
-                    if action == 'terminate-hard'
-                        vm.terminate(true)
-                    else
-                        vm.terminate
-                    end
-
-                    undeployed_nodes << vm_id
-                end
-            end
-
-            rc = shutdown
+            rc = shutdown(true)
 
             undeployed_nodes.concat(rc[0]) if rc[1].nil?
 
@@ -1203,7 +1188,7 @@ module OpenNebula
 
         # Shuts down all the given nodes
         # @param scale_down [true,false] True to set the 'disposed' node flag
-        def shutdown_nodes(nodes, n_nodes)
+        def shutdown_nodes(nodes, n_nodes, recover)
             success = true
             undeployed_nodes = []
 
@@ -1217,18 +1202,29 @@ module OpenNebula
                 action = @@default_shutdown
             end
 
-            nodes[0..n_nodes-1].each do |node|
-                rc = nil
-
+            nodes[0..n_nodes - 1].each do |node|
                 vm_id = node['deploy_id']
 
                 Log.debug(LOG_COMP,
                           "Role #{name} : Terminating VM #{vm_id}",
                           @service.id)
 
-                vm = OpenNebula::VirtualMachine.new_with_id(vm_id, @service.client)
+                vm = OpenNebula::VirtualMachine.new_with_id(vm_id,
+                                                            @service.client)
 
-                if action == 'terminate-hard'
+                vm_state = nil
+                lcm_state = nil
+
+                if recover
+                    vm.info
+
+                    vm_state = vm.state
+                    lcm_state = vm.lcm_state
+                end
+
+                if recover && Role.vm_failure?(vm_state, lcm_state)
+                    rc = vm.recover(2)
+                elsif action == 'terminate-hard'
                     rc = vm.terminate(true)
                 else
                     rc = vm.terminate
@@ -1236,7 +1232,7 @@ module OpenNebula
 
                 if OpenNebula.is_error?(rc)
                     msg = "Role #{name} : Terminate failed for VM #{vm_id}, will perform a Delete; #{rc.message}"
-                    Log.error LOG_COMP, msg, @service.id()
+                    Log.error LOG_COMP, msg, @service.id
                     @service.log_error(msg)
 
                     if action != 'terminate-hard'
@@ -1249,7 +1245,7 @@ module OpenNebula
 
                     if OpenNebula.is_error?(rc)
                         msg = "Role #{name} : Delete failed for VM #{vm_id}; #{rc.message}"
-                        Log.error LOG_COMP, msg, @service.id()
+                        Log.error LOG_COMP, msg, @service.id
                         @service.log_error(msg)
 
                         success = false
@@ -1257,6 +1253,8 @@ module OpenNebula
                         Log.debug(LOG_COMP,
                                   "Role #{name} : Delete success for VM #{vm_id}",
                                   @service.id)
+
+                        undeployed_nodes << vm_id
                     end
                 else
                     Log.debug(LOG_COMP,
