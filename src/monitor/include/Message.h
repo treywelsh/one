@@ -33,6 +33,11 @@ int zlib_decompress(const std::string& in, std::string& out);
 
 int zlib_compress(const std::string& in, std::string& out);
 
+/**
+ *  Set path to public and private rsa keys
+ */
+void init_rsa_keys(const std::string& pub_key, const std::string& pri_key);
+
 int rsa_public_encrypt(const std::string& in, std::string& out);
 
 int rsa_private_decrypt(const std::string& in, std::string& out);

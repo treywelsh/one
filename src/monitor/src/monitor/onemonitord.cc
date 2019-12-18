@@ -51,7 +51,7 @@ static void print_help()
 
 int main(int argc, char **argv)
 {
-    std::string config = "monitor.conf";
+    std::string config = "monitord.conf";
 
     if ( argv[1] !=  0 )
     {

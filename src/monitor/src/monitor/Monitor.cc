@@ -152,14 +152,16 @@ void Monitor::start()
     std::string addr;
     unsigned int port;
     unsigned int threads;
+    std::string pub_key;
+    std::string pri_key;
 
     auto udp_conf = config->get("UDP_LISTENER");
 
     udp_conf->vector_value("ADDRESS", addr);
-
     udp_conf->vector_value("PORT", port);
-
     udp_conf->vector_value("THREADS", threads);
+    udp_conf->vector_value("PUBKEY", pub_key);
+    udp_conf->vector_value("PRIKEY", pri_key);
 
     vector<const VectorAttribute *> drivers_conf;
 
@@ -169,6 +171,17 @@ void Monitor::start()
     int monitor_interval_host;
     config->get("MANAGER_TIMER", timer_period);
     config->get("MONITORING_INTERVAL_HOST", monitor_interval_host);
+
+    init_rsa_keys(pub_key, pri_key);
+
+    // Replace the PUBKEY with the content of the PUBKEY file
+    ifstream f(pub_key);
+    if (f.good())
+    {
+        stringstream buffer;
+        buffer << f.rdbuf();
+        udp_conf->replace("PUBKEY", buffer.str());
+    }
 
     hm.reset(new HostMonitorManager(hpool.get(),
                 addr, port, threads,

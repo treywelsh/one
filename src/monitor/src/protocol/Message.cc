@@ -230,17 +230,24 @@ int zlib_compress(const std::string& in, std::string& out)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+static string pubk_path;
+static string prik_path;
 
-//TODO read from configuration path
+void init_rsa_keys(const std::string& pub_key, const std::string& pri_key)
+{
+    pubk_path = pub_key;
+    prik_path = pri_key;
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 int rsa_public_encrypt(const std::string& in, std::string& out)
 {
     static RSA * rsa = nullptr;
 
     if ( rsa == nullptr) //initialize RSA structure
     {
-        std::string pubk_path = getenv("HOME");
-        pubk_path += "/.ssh/id_rsa.pub.pem";
-
         FILE * fp = fopen(pubk_path.c_str(), "r");
 
         if ( fp == nullptr )
@@ -283,10 +290,7 @@ int rsa_private_decrypt(const std::string& in, std::string& out)
 
     if ( rsa == nullptr) //initialize RSA structure
     {
-        std::string pubk_path = getenv("HOME");
-        pubk_path += "/.ssh/id_rsa";
-
-        FILE * fp = fopen(pubk_path.c_str(), "r");
+        FILE * fp = fopen(prik_path.c_str(), "r");
 
         if ( fp == nullptr )
         {
