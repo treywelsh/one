@@ -54,7 +54,7 @@ func (t *Template) Add(key keys.Template, value string) {
 // AddNIC allow to add a NIC to the template
 func (t *Template) AddNIC() *shared.NIC {
 	nic := shared.NewNIC()
-	t.Elements = append(t.Elements, nic)
+	t.Vectors = append(t.Vectors, &nic.Vector)
 	return nic
 }
 

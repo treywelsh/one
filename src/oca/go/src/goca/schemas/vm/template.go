@@ -160,14 +160,14 @@ func (t *Template) GetNICs() []shared.NIC {
 // AddDisk allow to add a disk to the template
 func (t *Template) AddDisk() *shared.Disk {
 	disk := shared.NewDisk()
-	t.Elements = append(t.Elements, disk)
+	t.Vectors = append(t.Vectors, &disk.Vector)
 	return disk
 }
 
 // AddNIC allow to add a NIC to the template
 func (t *Template) AddNIC() *shared.NIC {
 	nic := shared.NewNIC()
-	t.Elements = append(t.Elements, nic)
+	t.Vectors = append(t.Vectors, &nic.Vector)
 	return nic
 }
 
@@ -288,7 +288,7 @@ func (t *Template) AddSchedAction() *SchedAction {
 	action := &SchedAction{
 		dyn.Vector{XMLName: xml.Name{Local: keys.SchedActionVec}},
 	}
-	t.Template.Elements = append(t.Template.Elements, action)
+	t.Template.Vectors = append(t.Template.Vectors, &action.Vector)
 
 	return action
 }

@@ -25,7 +25,9 @@ import (
 
 // Template represents an OpenNebula syntax template
 type Template struct {
-	Elements []Element
+	XMLName xml.Name `xml:"TEMPLATE"`
+	Pairs   []*Pair
+	Vectors []*Vector
 }
 
 // Element is an interface that must implement the String
@@ -62,8 +64,18 @@ func (t *Template) String() string {
 	var s strings.Builder
 	endToken := "\n"
 
-	for i, element := range t.Elements {
-		if i == len(t.Elements)-1 {
+	for i, element := range t.Pairs {
+		if i == len(t.Pairs)-1 {
+			endToken = ""
+		}
+		s.WriteString(element.String() + endToken)
+	}
+	endToken = "\n"
+	if len(t.Vectors) > 0 {
+		s.WriteString(endToken)
+	}
+	for i, element := range t.Vectors {
+		if i == len(t.Vectors)-1 {
 			endToken = ""
 		}
 		s.WriteString(element.String() + endToken)
@@ -99,12 +111,7 @@ func (t *Template) GetPairs(key string) []*Pair {
 
 	pairs := make([]*Pair, 0, 1)
 
-	for i, _ := range t.Elements {
-
-		pair, ok := t.Elements[i].(*Pair)
-		if !ok {
-			continue
-		}
+	for _, pair := range t.Pairs {
 
 		if pair.XMLName.Local != key {
 			continue
@@ -121,13 +128,13 @@ func (v *Vector) GetPairs(key string) []*Pair {
 
 	pairs := make([]*Pair, 0, 1)
 
-	for i, _ := range v.Pairs {
+	for _, pair := range v.Pairs {
 
-		if v.Pairs[i].XMLName.Local != key {
+		if pair.XMLName.Local != key {
 			continue
 		}
 
-		pairs = append(pairs, &v.Pairs[i])
+		pairs = append(pairs, &pair)
 	}
 
 	return pairs
@@ -166,12 +173,7 @@ func (t *Template) GetVectors(key string) []*Vector {
 
 	vecs := make([]*Vector, 0, 1)
 
-	for i, _ := range t.Elements {
-
-		vec, ok := t.Elements[i].(*Vector)
-		if !ok {
-			continue
-		}
+	for _, vec := range t.Vectors {
 
 		if vec.XMLName.Local != key {
 			continue
@@ -354,10 +356,10 @@ func NewTemplate() *Template {
 
 // AddVector creates a new vector in the template
 func (t *Template) AddVector(key string) *Vector {
-	vector := &Vector{XMLName: xml.Name{Local: key}}
+	vector := Vector{XMLName: xml.Name{Local: key}}
 
-	t.Elements = append(t.Elements, vector)
-	return vector
+	t.Vectors = append(t.Vectors, &vector)
+	return &vector
 }
 
 // AddPair adds a new pair to a Template objects
@@ -375,8 +377,8 @@ func (t *Template) AddPair(key string, v interface{}) error {
 		val = v
 	}
 
-	pair := &Pair{XMLName: xml.Name{Local: strings.ToUpper(key)}, Value: val}
-	t.Elements = append(t.Elements, pair)
+	pair := Pair{XMLName: xml.Name{Local: strings.ToUpper(key)}, Value: val}
+	t.Pairs = append(t.Pairs, &pair)
 
 	return nil
 }
@@ -420,15 +422,22 @@ func (t *Template) AddPairToVec(vecKey, key string, value interface{}) error {
 
 // Del remove an element from Template objects
 func (t *Template) Del(key string) {
-	for i := 0; i < len(t.Elements); i++ {
-		if t.Elements[i].Key() != key {
+	for i := 0; i < len(t.Vectors); i++ {
+		if t.Vectors[i].Key() != key {
 			continue
 		}
-		t.Elements = append(t.Elements[:i], t.Elements[i+1:]...)
+		t.Vectors = append(t.Vectors[:i], t.Vectors[i+1:]...)
+	}
+
+	for i := 0; i < len(t.Pairs); i++ {
+		if t.Pairs[i].Key() != key {
+			continue
+		}
+		t.Pairs = append(t.Pairs[:i], t.Pairs[i+1:]...)
 	}
 }
 
-// Del remove a pair from Template
+// Del remove a pair from Vector
 func (t *Vector) Del(key string) {
 	for i := 0; i < len(t.Pairs); i++ {
 		if t.Pairs[i].XMLName.Local != key {

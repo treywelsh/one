@@ -49,7 +49,7 @@ func (t *Template) Add(key keys.Template, value string) {
 // AddAR allow to add a AR to the template
 func (t *Template) AddAddressRange() *AddressRange {
 	ar := NewAddressRange()
-	t.Elements = append(t.Elements, ar)
+	t.Vectors = append(t.Vectors, &ar.Vector)
 	return ar
 }
 

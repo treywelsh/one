@@ -18,7 +18,7 @@ func NewTemplate() *Template {
 // AddAR allow to add a security group rule to the template
 func (t *Template) AddRule() *Rule {
 	rule := NewRule()
-	t.Elements = append(t.Elements, rule)
+	t.Vectors = append(t.Vectors, &rule.Vector)
 	return rule
 }
 
