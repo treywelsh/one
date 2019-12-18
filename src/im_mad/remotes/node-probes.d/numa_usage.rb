@@ -63,26 +63,4 @@ nodes_s = ''
 
 nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
 
-puts nodes_s    /node(?<node_id>\d+)/ =~ node
-    next unless node_id
-
-    nodes[node_id] = {}
-
-    NUMA.huge_pages(nodes, node_id)
-
-    NUMA.memory(nodes, node_id)
-end
-
-# nodes_s = ''
-
-# nodes.each {|i, v| nodes_s << NUMA.node_to_template(v, i) }
-
-# puts nodes_s
-
-nodes_xml = Nokogiri::XML('<NUMA_NODES/>')
-
-nodes.each do |i, v|
-    nodes_xml.at('NUMA_NODES').add_child(NUMA.node_to_template(v, i))
-end
-
-puts nodes_xml.root.to_xml
+puts nodes_s
