@@ -70,18 +70,17 @@ rescue Exception => e
     exit 1
 end
 
-conf[:debug_level]  ||= 2
-conf[:lcm_interval] ||= 30
+conf[:debug_level]      ||= 2
+conf[:lcm_interval]     ||= 30
 conf[:default_cooldown] ||= 300
-conf[:shutdown_action] ||= 'terminate'
-conf[:action_number] ||= 1
-conf[:action_period] ||= 60
-
-conf[:auth] = 'opennebula'
+conf[:shutdown_action]  ||= 'terminate'
+conf[:action_number]    ||= 1
+conf[:action_period]    ||= 60
+conf[:vm_name_template] ||= DEFAULT_VM_NAME_TEMPLATE
+conf[:auth]             = 'opennebula'
 
 set :bind, conf[:host]
 set :port, conf[:port]
-
 set :config, conf
 
 include CloudLogger
@@ -126,6 +125,15 @@ before do
     end
 end
 
+# Set status error and return the error msg
+#
+# @param error_msg  [String]  Error message
+# @param error_code [Integer] Http error code
+def internal_error(error_msg, error_code)
+    status error_code
+    body error_msg
+end
+
 ##############################################################################
 # Defaults
 ##############################################################################
@@ -133,15 +141,23 @@ end
 Role.init_default_cooldown(conf[:default_cooldown])
 Role.init_default_shutdown(conf[:shutdown_action])
 Role.init_force_deletion(conf[:force_deletion])
-
-conf[:vm_name_template] ||= DEFAULT_VM_NAME_TEMPLATE
 Role.init_default_vm_name_template(conf[:vm_name_template])
+
 ServiceTemplate.init_default_vn_name_template(conf[:vn_name_template])
+
+##############################################################################
+# HTTP error codes
+##############################################################################
+
+VALIDATION_EC = 400 # bad request by the client
+OPERATION_EC  = 405 # operation not allowed (e.g: in current state)
+GENERAL_EC    = 500 # general error
 
 ##############################################################################
 # LCM and Event Manager
 ##############################################################################
 
+# TODO make thread number configurable?
 lcm = ServiceLCM.new(10, cloud_auth)
 
 ##############################################################################
@@ -180,13 +196,14 @@ delete '/service/:id' do
     service = OpenNebula::Service.new_with_id(params[:id], @client)
 
     rc = service.info
-
     if OpenNebula.is_error?(rc)
         error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
-        return status 204 # TODO, check proper return code
+        return internal_error(rc.message, GENERAL_EC)
     end
 
-    return status 204 if service.state == Service::STATE['DELETING']
+    if service.state == Service::STATE['DELETING']
+        return internal_error('The service is already deleting', OPERATION_EC)
+    end
 
     # Starts service undeploying async
     lcm.am.trigger_action(:undeploy, service.id, service.id)
@@ -213,7 +230,7 @@ post '/service/:id/action' do
             lcm.chown_action(@client, params[:id], u_id, g_id)
         else
             OpenNebula::Error.new("Action #{action['perform']}: " \
-                    'You have to specify a UID')
+                                  'You have to specify a UID')
         end
     when 'chgrp'
         if opts && opts['group_id']
@@ -222,21 +239,21 @@ post '/service/:id/action' do
             lcm.chown_action(@client, params[:id], -1, g_id)
         else
             OpenNebula::Error.new("Action #{action['perform']}: " \
-                    'You have to specify a GID')
+                                  'You have to specify a GID')
         end
     when 'chmod'
         if opts && opts['octet']
             lcm.chmod_action(@client, params[:id], opts['octet'])
         else
             OpenNebula::Error.new("Action #{action['perform']}: " \
-                    'You have to specify an OCTET')
+                                  'You have to specify an OCTET')
         end
     when 'rename'
         if opts && opts['name']
             lcm.rename_action(@client, params[:id], opts['name'])
         else
             OpenNebula::Error.new("Action #{action['perform']}: " \
-                    'You have to specify a name')
+                                  'You have to specify a name')
         end
     when 'update'
         if opts && opts['append']
@@ -252,11 +269,11 @@ post '/service/:id/action' do
                 status 204
             else
                 OpenNebula::Error.new("Action #{action['perform']}: " \
-                        'You have to provide a template')
+                                      'You have to provide a template')
             end
         else
             OpenNebula::Error.new("Action #{action['perform']}: " \
-                    'Only supported for append')
+                                  'Only supported for append')
         end
     else
         OpenNebula::Error.new("Action #{action['perform']} not supported")
@@ -333,7 +350,8 @@ end
 ##############################################################################
 
 get '/service_template' do
-    s_template_pool = OpenNebula::ServiceTemplatePool.new(@client, OpenNebula::Pool::INFO_ALL)
+    s_template_pool = OpenNebula::ServiceTemplatePool
+                      .new(@client, OpenNebula::Pool::INFO_ALL)
 
     rc = s_template_pool.info
     if OpenNebula.is_error?(rc)
@@ -346,7 +364,8 @@ get '/service_template' do
 end
 
 get '/service_template/:id' do
-    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id], @client)
+    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id],
+                                                               @client)
 
     rc = service_template.info
     if OpenNebula.is_error?(rc)
@@ -359,7 +378,8 @@ get '/service_template/:id' do
 end
 
 delete '/service_template/:id' do
-    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id], @client)
+    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id],
+                                                               @client)
 
     rc = service_template.delete
     if OpenNebula.is_error?(rc)
@@ -370,12 +390,13 @@ delete '/service_template/:id' do
 end
 
 put '/service_template/:id' do
-    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id], @client)
+    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id],
+                                                               @client)
 
     begin
         rc = service_template.update(request.body.read)
     rescue Validator::ParseException, JSON::ParserError
-        error 400, $!.message
+        return internal_error($!.message, VALIDATION_EC)
     end
 
     if OpenNebula.is_error?(rc)
@@ -385,18 +406,18 @@ put '/service_template/:id' do
     service_template.info
 
     status 200
+
     body service_template.to_json
 end
 
 post '/service_template' do
-    s_template = OpenNebula::ServiceTemplate.new(
-                    OpenNebula::ServiceTemplate.build_xml,
-                    @client)
+    xml        = OpenNebula::ServiceTemplate.build_xml
+    s_template = OpenNebula::ServiceTemplate.new(xml, @client)
 
     begin
         rc = s_template.allocate(request.body.read)
     rescue Validator::ParseException, JSON::ParserError
-        error 400, $!.message
+        return internal_error($!.message, VALIDATION_EC)
     end
 
     if OpenNebula.is_error?(rc)
@@ -406,15 +427,15 @@ post '/service_template' do
     s_template.info
 
     status 201
+
     # body Parser.render(rc)
     body s_template.to_json
 end
 
 post '/service_template/:id/action' do
-    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id], @client)
-
+    service_template = OpenNebula::ServiceTemplate.new_with_id(params[:id],
+                                                               @client)
     action = JSON.parse(request.body.read)['action']
-
     opts   = action['params']
     opts   = {} if opts.nil?
 
@@ -430,23 +451,43 @@ post '/service_template/:id/action' do
         end
 
         merge_template = opts['merge_template']
-        service_json = JSON.parse(service_template.to_json)
+        service_json   = JSON.parse(service_template.to_json)
 
         # Check custom_attrs
-        if !(service_json['DOCUMENT']['TEMPLATE']['BODY']['custom_attrs'].keys -
-           merge_template['custom_attrs_values'].keys).empty?
-            status 204
-            return body 'Every custom_attrs key must have its value defined '\
-                        'at custom_attrs_value'
+        custom_attrs = service_json['DOCUMENT']['TEMPLATE']['BODY']['custom_attrs']
+        custom_attrs_values = merge_template['custom_attrs_values']
+
+        if custom_attrs && !(custom_attrs.is_a? Hash)
+            return internal_error('Wrong custom_attrs format',
+                                  VALIDATION_EC)
+        end
+
+        if custom_attrs_values && !(custom_attrs_values.is_a? Hash)
+            return internal_error('Wrong custom_attrs_values format',
+                                  VALIDATION_EC)
+        end
+
+        if !(custom_attrs.keys - custom_attrs_values.keys).empty?
+            return internal_error('Every custom_attrs key must have its ' \
+                                  'value defined at custom_attrs_value',
+                                  VALIDATION_EC)
         end
 
         # Check networks
-        if !(service_json['DOCUMENT']['TEMPLATE']['BODY']['networks'].keys -
-           merge_template['networks_values'].collect {|i| i.keys }.flatten)
-           .empty?
-            status 204
-            return body 'Every network key must have its value defined at ' \
-                        'networks_value'
+        networks = service_json['DOCUMENT']['TEMPLATE']['BODY']['networks']
+        networks_values = merge_template['networks_values']
+
+        if networks && !(networks.is_a? Hash)
+            return internal_error('Wrong networks format', VALIDATION_EC)
+        end
+
+        if networks_values && networks_values.find {|v| !v.is_a? Hash }
+            return internal_error('Wrong networks_values format', VALIDATION_EC)
+        end
+
+        if !(networks.keys - networks_values.collect {|i| i.keys }.flatten).empty?
+            return internal_error('Every network key must have its value ' \
+                                  'defined at networks_value', VALIDATION_EC)
         end
 
         # Creates service document
@@ -454,6 +495,9 @@ post '/service_template/:id/action' do
 
         if OpenNebula.is_error?(service)
             error CloudServer::HTTP_ERROR_CODE[service.errno], service.message
+        elsif service.is_a? StandardError
+            # there was a JSON validation error
+            return internal_error(service.message, GENERAL_EC)
         else
             # Starts service deployment async
             lcm.am.trigger_action(:deploy, service.id, service.id)
@@ -481,7 +525,7 @@ post '/service_template/:id/action' do
             service_template.chown(-1, opts['group_id'].to_i)
         else
             OpenNebula::Error.new("Action #{action['perform']}: "\
-                    'You have to specify a GID')
+                                  'You have to specify a GID')
         end
     when 'chmod'
         if opts && opts['octet']
@@ -492,20 +536,18 @@ post '/service_template/:id/action' do
                                   'You have to specify an OCTET')
         end
     when 'update'
+        append = opts['append'] == true
+
         if opts && opts['template_json']
             begin
-                rc = service_template.update(
-                    opts['template_json'],
-                    (opts['append'] == true))
+                rc = service_template.update(opts['template_json'], append)
 
                 status 204
             rescue Validator::ParseException, JSON::ParserError
-                OpenNebula::Error.new($!.message)
+                return internal_error($!.message, VALIDATION_EC)
             end
         elsif opts && opts['template_raw']
-            rc = service_template.update_raw(
-                opts['template_raw'],
-                (opts['append'] == true))
+            rc = service_template.update_raw(opts['template_raw'], append)
 
             status 204
         else

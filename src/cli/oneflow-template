@@ -221,6 +221,8 @@ CommandParser::CmdParser.new(ARGV) do
 
         options[:delay] ? delay = options[:delay] : delay = 3
 
+        Signal.trap('INT') { exit(-1) }
+
         begin
             loop do
                 CLIHelper.scr_cls

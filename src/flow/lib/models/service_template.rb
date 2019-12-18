@@ -152,9 +152,13 @@ module OpenNebula
                     :required => true
                 },
                 'deployment' => {
-                :type => :string,
-                :enum => %w{none straight},
-                :default => 'none'
+                    :type => :string,
+                    :enum => %w{none straight},
+                    :default => 'none'
+                },
+                'description' => {
+                    :type => :string,
+                    :default => ''
                 },
                 'shutdown_action' => {
                     :type => :string,
@@ -168,12 +172,29 @@ module OpenNebula
                 },
                 'custom_attrs' => {
                     :type => :object,
-                    :properties => {
-                    },
+                    :properties => { },
+                    :required => false
+                },
+                'custom_attrs_values' => {
+                    :type => :object,
+                    :properties => { },
                     :required => false
                 },
                 'ready_status_gate' => {
                     :type => :boolean,
+                    :required => false
+                },
+                'networks' => {
+                    :type => :object,
+                    :properties => { },
+                    :required => false
+                },
+                'networks_values' => {
+                    :type => :array,
+                    :items => {
+                        :type => :object,
+                        :properties => { }
+                    },
                     :required => false
                 }
             }
@@ -214,9 +235,7 @@ module OpenNebula
             if append
                 rc = info
 
-                if OpenNebula.is_error? rc
-                    return rc
-                end
+                return rc if OpenNebula.is_error?(rc)
 
                 template = @body.merge(template)
             end
@@ -270,19 +289,14 @@ module OpenNebula
                               .new(OpenNebula::Service.build_xml, @client)
 
                     rc = service.allocate(instantiate_template.to_json)
-                rescue Validator::ParseException, JSON::ParserError
-                    error 400, $!.message
-                    return
+                rescue Validator::ParseException, JSON::ParserError => e
+                    return e
                 end
             end
 
-            if OpenNebula.is_error?(rc)
-                error CloudServer::HTTP_ERROR_CODE[rc.errno], rc.message
-                return
-            end
+            return rc if OpenNebula.is_error?(rc)
 
             service.info
-
             service
         end
 

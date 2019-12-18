@@ -200,7 +200,16 @@ def list_services(client, options)
             [0, response.body]
         else
             array_list = JSON.parse(response.body)
-            SERVICE_TABLE.show(array_list['DOCUMENT_POOL']['DOCUMENT'])
+            array_list = array_list['DOCUMENT_POOL']['DOCUMENT']
+
+            if options.key? :no_done
+                # remove from list flows in DONE state
+                array_list.reject! do |value|
+                    value['TEMPLATE']['BODY']['state'] == 5
+                end
+            end
+
+            SERVICE_TABLE.show(array_list)
             0
         end
     end
@@ -406,6 +415,12 @@ CommandParser::CmdParser.new(ARGV) do
     set :option, CommandParser::VERSION
     set :option, CommandParser::HELP
 
+    NO_DONE = {
+        :name => 'no_done',
+        :large => '--no-done',
+        :description => 'Do not show services in DONE state'
+    }
+
     #
     # Formatters for arguments
     #
@@ -443,7 +458,7 @@ CommandParser::CmdParser.new(ARGV) do
         List the available services
     EOT
 
-    command :list, list_desc, :options => Service::JSON_FORMAT do
+    command :list, list_desc, :options => [Service::JSON_FORMAT, NO_DONE] do
         client = Service::Client.new(
             :username => options[:username],
             :password => options[:password],
@@ -485,7 +500,8 @@ CommandParser::CmdParser.new(ARGV) do
     command :top, top_desc, [:service_id, nil],
             :options => [Service::JSON_FORMAT,
                          Service::TOP,
-                         CLIHelper::DELAY] do
+                         CLIHelper::DELAY,
+                         NO_DONE] do
         client = Service::Client.new(
             :username => options[:username],
             :password => options[:password],
@@ -494,6 +510,8 @@ CommandParser::CmdParser.new(ARGV) do
         )
 
         options[:delay] ? delay = options[:delay] : delay = 3
+
+        Signal.trap('INT') { exit(-1) }
 
         begin
             loop do
@@ -506,7 +524,10 @@ CommandParser::CmdParser.new(ARGV) do
                     rc, message = list_services(client, options)
                 end
 
-                raise message if rc
+                if OpenNebula.is_error?(rc)
+                    STDERR.puts(message)
+                    exit(-1)
+                end
 
                 sleep delay
             end
