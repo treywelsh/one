@@ -156,6 +156,21 @@ begin
         :monitor_host => {
             :period => config.elements['PROBE_PERIOD/MONITOR_HOST'].text.to_s,
             :path => 'host/monitor'
+        },
+        
+        :status_vms => {
+            :period => config.elements['PROBE_PERIOD/VMS'].text.to_s,
+            :path => 'vms/status'
+        },
+
+        :monitor_vms => {
+            :period => config.elements['PROBE_PERIOD/VMM'].text.to_s,
+            :path => 'vms/monitor'
+        },
+
+        :datastore => {
+            :period => config.elements['PROBE_PERIOD/DATASTORE'].text.to_s,
+            :path => 'datastore'
         }
     }
 
@@ -184,7 +199,7 @@ probes.each do |msg_type, conf|
     }
 end
 
-threads << Thread.new do # TODO: decide which period
+threads << Thread.new do
     sleep 60
     `#{__dir__}/../#{hypervisor}-probes.d/collectd-client-shepherd.sh`
 end
